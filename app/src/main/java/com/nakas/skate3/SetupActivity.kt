@@ -5,6 +5,7 @@ import android.app.AlertDialog
 import android.app.ActivityManager
 import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -88,6 +89,7 @@ class SetupActivity : Activity() {
         actions.addView(titleUpdateButton)
         pickTitleUpdateButton = button("Pick the title update file…") { pick(REQUEST_TU) }
         actions.addView(pickTitleUpdateButton)
+        actions.addView(button("Map packs…") { showMapPacks() })
         actions.addView(button("Copy the details") { copyDiagnostics() })
         actions.addView(button("Save a diagnostic report") { saveReport() })
         root.addView(ScrollView(this).apply { addView(actions) },
@@ -120,6 +122,18 @@ class SetupActivity : Activity() {
             appendLine("Disc files: ${if (game) "installed" else "missing"}")
             appendLine("Title update 3: ${if (tu) "staged" else "missing"}")
             appendLine()
+            val packs = MapPacks.installed(this@SetupActivity)
+            if (packs.isNotEmpty()) {
+                appendLine("Map packs:")
+                for (pack in packs) {
+                    val label = pack.displayName?.takeIf { it != pack.name }?.let { " ($it)" } ?: ""
+                    appendLine("  ${pack.name}$label  ${MapPacks.mb(pack.bytes)}")
+                }
+                if (packs.size > 1) {
+                    appendLine("The game asks which one to load when it starts.")
+                }
+                appendLine()
+            }
             appendLine(GameData.gameDir(this@SetupActivity).absolutePath)
             appendLine(GameData.describeFree(this@SetupActivity))
             if (GameData.usingInternalFallback(this@SetupActivity)) {
@@ -232,10 +246,19 @@ class SetupActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQUEST_ISO && requestCode != REQUEST_TU) return
+        if (requestCode != REQUEST_ISO && requestCode != REQUEST_TU &&
+            requestCode != REQUEST_PACK) {
+            return
+        }
         val uri = data?.data
         if (resultCode != RESULT_OK || uri == null) {
             refresh()
+            return
+        }
+        // A map pack is a folder rather than a file, and this side does the
+        // copying itself - there is no descriptor to hand the engine.
+        if (requestCode == REQUEST_PACK) {
+            installMapPack(uri)
             return
         }
         // detachFd hands the descriptor to the process, so it outlives this
@@ -297,6 +320,133 @@ class SetupActivity : Activity() {
             .show()
     }
 
+    /**
+     * Map packs: what is installed, and the way in.
+     *
+     * Installing one used to mean copying a folder into Android/data with a
+     * file manager, and on a phone that is a coin toss - a file written there
+     * by a root or Shizuku file manager belongs to that tool, and the game is
+     * refused when it opens it. Everything the app writes itself is readable by
+     * the game, so the app does the copying.
+     */
+    private fun showMapPacks() {
+        if (busy) return
+        val packs = MapPacks.installed(this)
+        if (packs.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle("Map packs")
+                .setMessage(
+                    "No map packs are installed.\n\n" +
+                        "A pack is a folder holding a .big file and a .header file. " +
+                        "Extract it somewhere ordinary first - the Download folder is " +
+                        "easiest - then choose that folder here and the app will copy " +
+                        "it in.\n\n" +
+                        "Do not copy it into the game's own folder yourself: files put " +
+                        "there by a file manager usually belong to the file manager, and " +
+                        "the game is not allowed to read them."
+                )
+                .setPositiveButton("Choose a pack folder…") { _, _ -> pickMapPack() }
+                .setNegativeButton("Cancel", null)
+                .show()
+            return
+        }
+        val labels = packs.map { pack ->
+            val name = pack.displayName?.takeIf { it != pack.name }?.let { "${pack.name}  ($it)" }
+                ?: pack.name
+            "$name\n${MapPacks.mb(pack.bytes)}"
+        } + "Install another pack…"
+        AlertDialog.Builder(this)
+            .setTitle(if (packs.size == 1) "1 map pack installed" else "${packs.size} map packs installed")
+            .setItems(labels.toTypedArray()) { _, which ->
+                if (which == packs.size) pickMapPack() else confirmRemoveMapPack(packs[which])
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun pickMapPack() {
+        // A folder, not a file: the pack is two files that have to stay
+        // together, and the folder's name is part of what the game looks for.
+        // Launched as itself rather than through a chooser: the folder picker
+        // is the system's own, and wrapping it produces a list of document
+        // providers to pick from before the player can pick a folder.
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+        try {
+            startActivityForResult(intent, REQUEST_PACK)
+        } catch (e: Exception) {
+            Log.e(TAG, "no folder picker available", e)
+            status.text = "This device has no folder picker available."
+        }
+    }
+
+    private fun installMapPack(tree: Uri) {
+        if (busy) return
+        busy = true
+        status.text = "Copying the map pack…"
+        Thread {
+            var lastShown = 0L
+            val outcome = runCatching {
+                MapPacks.install(this, tree) { copied, total ->
+                    // Only when the number on screen would change: the status
+                    // view is on the UI thread and a 200 MB pack would post
+                    // thousands of identical updates.
+                    val percent = if (total > 0) copied * 100 / total else 0
+                    if (percent != lastShown) {
+                        lastShown = percent
+                        runOnUiThread { status.text = "Copying the map pack… $percent%" }
+                    }
+                }
+            }
+            runOnUiThread {
+                busy = false
+                outcome.fold(
+                    onSuccess = { pack ->
+                        refresh()
+                        status.text = buildString {
+                            appendLine("Installed ${pack.name}.")
+                            pack.displayName?.takeIf { it != pack.name }?.let { appendLine(it) }
+                            appendLine()
+                            appendLine(
+                                "It is staged into the game the next time you press Play. " +
+                                    "If more than one pack is installed, the game asks which " +
+                                    "one to load."
+                            )
+                        }
+                    },
+                    onFailure = { e ->
+                        refresh()
+                        status.text = "The map pack was not installed.\n\n" +
+                            (e.message ?: e.toString())
+                    }
+                )
+            }
+        }.start()
+    }
+
+    /**
+     * Removing a pack takes the staged copy with it. The engine only clears
+     * staged packs it can still see in the drop folder, so deleting the folder
+     * alone would leave the pack installed and still loading.
+     */
+    private fun confirmRemoveMapPack(pack: MapPacks.Pack) {
+        AlertDialog.Builder(this)
+            .setTitle("Remove ${pack.name}?")
+            .setMessage(
+                "${MapPacks.mb(pack.bytes)} is deleted from this phone, along with the " +
+                    "copy staged into the game.\n\nYour own save data is not touched."
+            )
+            .setPositiveButton("Remove") { _, _ ->
+                val removed = runCatching { MapPacks.remove(this, pack) }
+                refresh()
+                status.text = removed.fold(
+                    onSuccess = { "Removed ${pack.name}." },
+                    onFailure = { e -> "${pack.name} could not be removed.\n\n${e.message ?: e}" }
+                )
+            }
+            .setNegativeButton("Keep", null)
+            .show()
+    }
+
     private fun startGame(extraArgs: List<String> = emptyList()) {
         GameData.userDir(this).mkdirs()
         GameData.gameDir(this).mkdirs()
@@ -340,6 +490,7 @@ class SetupActivity : Activity() {
         private const val TAG = "skate3"
         private const val REQUEST_ISO = 0x5301
         private const val REQUEST_TU = 0x5302
+        private const val REQUEST_PACK = 0x5303
     }
 
     /**
