@@ -35,6 +35,7 @@ class SetupActivity : Activity() {
     private lateinit var playButton: Button
     private lateinit var titleUpdateButton: Button
     private lateinit var pickTitleUpdateButton: Button
+    private lateinit var useLocalTuButton: Button
     @Volatile private var busy = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,6 +88,8 @@ class SetupActivity : Activity() {
         actions.addView(button("Install from a disc image…") { pick(REQUEST_ISO) })
         titleUpdateButton = button("Download title update") { downloadTitleUpdate() }
         actions.addView(titleUpdateButton)
+        useLocalTuButton = button("Use the title update already here") { useLocalTitleUpdate() }
+        actions.addView(useLocalTuButton)
         pickTitleUpdateButton = button("Pick the title update file…") { pick(REQUEST_TU) }
         actions.addView(pickTitleUpdateButton)
         actions.addView(button("Map packs…") { showMapPacks() })
@@ -116,6 +119,11 @@ class SetupActivity : Activity() {
         // Only worth offering while it is the missing piece.
         titleUpdateButton.visibility = if (tu) View.GONE else View.VISIBLE
         pickTitleUpdateButton.visibility = if (tu) View.GONE else View.VISIBLE
+        // Someone who copied the package in with a file manager, or whose
+        // download completed before a later step failed, already has it. Asking
+        // them to fetch it again from a site that is down is the wrong answer.
+        val local = if (tu) null else TitleUpdate.alreadyOnDisk(this)
+        useLocalTuButton.visibility = if (local == null) View.GONE else View.VISIBLE
         status.text = buildString {
             appendLine(if (ready) "Ready to play." else "The game's own files are not here yet.")
             appendLine()
@@ -156,7 +164,13 @@ class SetupActivity : Activity() {
                     appendLine()
                     appendLine(
                         "The title update is required to boot. Download it, or pick your " +
-                            "own copy during the install."
+                            "own copy with \"Pick the title update file\"."
+                    )
+                    appendLine()
+                    appendLine(
+                        "If the download fails, fetch ${TitleUpdate.PACKAGE_NAME} " +
+                            "(about 1.7 MB) on a computer, copy it into the folder above, " +
+                            "and this screen will offer to use it."
                     )
                 }
             }
@@ -199,14 +213,38 @@ class SetupActivity : Activity() {
                         startGame(listOf("--skate3_install_tu=${file.absolutePath}"))
                     },
                     onFailure = { e ->
+                        // Say which of the two working routes to take. The host
+                        // is somebody else's and does go down - a Samsung M53
+                        // report showed 502 Bad Gateway on every attempt across
+                        // four sessions, for a file that downloads fine from a
+                        // desk an hour later. "Check the connection" sends
+                        // people to look at the wrong thing.
                         status.text = "The title update could not be downloaded.\n\n" +
                             (e.message ?: e.toString()) +
-                            "\n\nCheck the connection, or put the file on the phone and use " +
-                            "\"install from a disc image\" to pick it yourself."
+                            "\n\nThe download site is not this project's and is " +
+                            "sometimes down. Two ways round it:\n\n" +
+                            "\u2022 Wait and try again.\n" +
+                            "\u2022 Download it on a computer from\n" +
+                            "  xboxunity.net/Resources/Lib/TitleUpdate.php?tuid=21774\n" +
+                            "  (about 1.7 MB, named\n  ${TitleUpdate.PACKAGE_NAME})\n" +
+                            "  then use \"Pick the title update file\" here."
                     }
                 )
             }
         }.start()
+    }
+
+    /** Stages the package that is already in the folder. */
+    private fun useLocalTitleUpdate() {
+        if (busy) return
+        val file = TitleUpdate.alreadyOnDisk(this)
+        if (file == null) {
+            refresh()
+            status.text = "There is no title update file in\n" +
+                GameData.root(this).absolutePath
+            return
+        }
+        startGame(listOf("--skate3_install_tu=${file.absolutePath}"))
     }
 
     /**
@@ -261,6 +299,20 @@ class SetupActivity : Activity() {
             installMapPack(uri)
             return
         }
+        // The title update is copied; the disc image is read where it lies.
+        //
+        // Not an inconsistency - the engine's two readers differ. Its ISO
+        // reader was taught to read a descriptor in place, so a 7 GB image
+        // never has to be duplicated. Its title-update reader was not: that one
+        // still opens the path it is handed, which re-runs a permission check
+        // the app fails, and a Samsung M53 report shows it dying on exactly
+        // that ("Unable to open /proc/self/fd/123") the instant the file is
+        // chosen. The package is 1.7 MB, so copying it is free and gives the
+        // engine an ordinary path.
+        if (requestCode == REQUEST_TU) {
+            stageTitleUpdate(uri)
+            return
+        }
         // detachFd hands the descriptor to the process, so it outlives this
         // activity and stays readable from the game as /proc/self/fd/<n>.
         // Both activities run in the same process - see the manifest, only
@@ -277,13 +329,36 @@ class SetupActivity : Activity() {
                 "device's own storage first."
             return
         }
-        val flag = if (requestCode == REQUEST_ISO) "skate3_install_iso" else "skate3_install_tu"
-        val args = listOf("--$flag=/proc/self/fd/$fd")
-        if (requestCode == REQUEST_ISO) {
-            confirmLongInstall(args)
-        } else {
-            startGame(args)
-        }
+        confirmLongInstall(listOf("--skate3_install_iso=/proc/self/fd/$fd"))
+    }
+
+    /**
+     * Copies the picked package in, then hands the engine its path to stage and
+     * verify. Off the UI thread: it is only 1.7 MB, but it may be coming from a
+     * cloud provider that fetches it on demand.
+     */
+    private fun stageTitleUpdate(uri: Uri) {
+        if (busy) return
+        busy = true
+        status.text = "Copying the title update\u2026"
+        Thread {
+            val outcome = runCatching { TitleUpdate.stageFromUri(this, uri) }
+            runOnUiThread {
+                busy = false
+                outcome.fold(
+                    onSuccess = { file ->
+                        startGame(listOf("--skate3_install_tu=${file.absolutePath}"))
+                    },
+                    onFailure = { e ->
+                        refresh()
+                        status.text = "That file could not be used.\n\n" +
+                            (e.message ?: e.toString()) +
+                            "\n\nThe title update is a single file of about 1.7 MB, " +
+                            "usually named\n${TitleUpdate.PACKAGE_NAME}"
+                    }
+                )
+            }
+        }.start()
     }
 
     /**

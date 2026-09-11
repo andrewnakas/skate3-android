@@ -83,6 +83,13 @@ object Diagnostics {
         appendLine("Folder exists ${root.isDirectory}, writable ${root.canWrite()}")
         appendLine("Disc files installed ${GameData.isGameInstalled(context)}")
         appendLine("Title update staged ${GameData.isTitleUpdateInstalled(context)}")
+        // Which route the player is on when it is not staged. A package sitting
+        // in the folder unstaged means the install failed AFTER the transfer,
+        // which is a different bug from never having got the file at all, and
+        // the reports could not tell the two apart.
+        appendLine("Title update package on disk " +
+            (TitleUpdate.alreadyOnDisk(context)?.let { "${it.name} (${it.length()} bytes)" }
+                ?: "none"))
         appendLine("Ready to play ${GameData.isReadyToPlay(context)}")
         appendLine(freeSpace(root))
         appendLine()
