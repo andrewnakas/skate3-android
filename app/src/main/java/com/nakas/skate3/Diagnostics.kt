@@ -108,6 +108,10 @@ object Diagnostics {
         appendLine("Locale ${Locale.getDefault()}")
         appendLine(userSetting(context, "user_language"))
         appendLine()
+        appendLine(section("Shadows and app lifecycle"))
+        appendLine(shadowSummary(context))
+        appendLine()
+
         appendLine(section("Engine startup (stderr)"))
         appendLine(tail(File(root, "stderr.log"), STDERR_TAIL_BYTES))
         appendLine()
@@ -386,6 +390,35 @@ object Diagnostics {
             ?.trim() ?: "$key <not set>"
     } catch (e: Exception) {
         "$key unreadable (${e.message})"
+    }
+
+    /**
+     * The renderer's own shadow lines, pulled out of the log and put near the
+     * top of the report.
+     *
+     * Two shadow bugs are open against Adreno devices and both are arguments
+     * about numbers - what the shadow map was asked for against what the
+     * device actually granted, and what one texel is worth on the ground. The
+     * engine logs all of that now, but it logs it 200 KB up a log that gets
+     * truncated, so a report could carry the evidence and still not show it.
+     */
+    private fun shadowSummary(context: Context): String = try {
+        val log = File(GameData.root(context), "skate3.log")
+        if (!log.isFile) "No engine log yet." else {
+            val lines = log.useLines { seq ->
+                seq.filter {
+                    it.contains("shadow atlas") || it.contains("sun-shadow map") ||
+                        it.contains("R16G16_UNORM") || it.contains("[lifecycle]")
+                }.toList()
+            }
+            // Newest first and capped: these repeat on every launch and on
+            // every hot resolution change, and the last few are the ones that
+            // describe the session being reported.
+            if (lines.isEmpty()) "Nothing logged. This build may predate the shadow diagnostics."
+            else lines.takeLast(12).joinToString("\n")
+        }
+    } catch (e: Exception) {
+        "Could not be read (${e.message})"
     }
 
     private const val LOG_TAIL_BYTES = 256L * 1024

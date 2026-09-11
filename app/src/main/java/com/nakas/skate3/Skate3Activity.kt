@@ -72,6 +72,31 @@ class Skate3Activity : SDLActivity() {
         if (hasFocus) hideSystemBars()
     }
 
+    // No onTrimMemory override here on purpose. SDLActivity already overrides
+    // it and calls nativeLowMemory() at every level, so the engine's cache
+    // release is reached through super - adding a second path would only fire
+    // the same handler twice.
+
+    /**
+     * Notes that a session was running, so the launcher can tell a crash from
+     * an ordinary exit.
+     *
+     * Being killed in the background leaves nothing behind: no crash report, no
+     * native fault, just the launcher on screen next time. That is
+     * indistinguishable from having quit on purpose, which is why the report
+     * for it reads as "either frozen or crashed, it appears to just crash most
+     * of the time" - the tester could not tell either.
+     */
+    override fun onResume() {
+        super.onResume()
+        GameData.markSessionRunning(this, true)
+    }
+
+    override fun onDestroy() {
+        GameData.markSessionRunning(this, false)
+        super.onDestroy()
+    }
+
     private fun hideSystemBars() {
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility =

@@ -41,7 +41,38 @@ class SetupActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildUi())
+        // Before refresh(), which clears the marker's meaning by reporting the
+        // ordinary state.
+        val killed = GameData.lastSessionWasKilled(this)
+        GameData.markSessionRunning(this, false)
         refresh()
+        if (killed) explainKilledSession()
+    }
+
+    /**
+     * Says what happened when the last session did not end on purpose.
+     *
+     * Android stops a backgrounded process this size without a word - no crash
+     * report, no fault, nothing in any log - and the player is simply looking
+     * at the launcher again. Reported as the game crashing when switching
+     * apps, which is accurate about what was seen and misleading about the
+     * cause, and there was no way for anyone to tell the difference. Now there
+     * is, so say so.
+     */
+    private fun explainKilledSession() {
+        AlertDialog.Builder(this)
+            .setTitle("The game was closed by Android")
+            .setMessage(
+                "The last session did not end on its own. Android reclaims memory " +
+                    "from apps in the background, and this one needs about 3 GB, " +
+                    "which makes it the first thing to go.\n\n" +
+                    "It is not a crash and there is nothing wrong with your install. " +
+                    "To make it less likely, close other apps before playing and " +
+                    "avoid leaving the game in the background for long.\n\n" +
+                    "Your career progress is saved by the game as you play."
+            )
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     override fun onResume() {

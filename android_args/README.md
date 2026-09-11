@@ -38,6 +38,10 @@ really does implement both, so leave them alone unless measuring tearing.
   warm; a locked 30 reads better than an unstable 45.
 - `quality.txt` — spends the headroom an 8 Gen 1 has over the phones this was
   tuned on: shadows, ambient occlusion, bloom, 2x MSAA.
+- `shadow-ab.txt` — one experiment per block, commented out, for bisecting the
+  shadow artefacts reported on Adreno 725 and 740. Read the file: the order of
+  the blocks is the argument, and running them out of order wastes the runs.
+  Everything in it is hot-reloadable, so it works on a build you already have.
 
 ## streaming.txt / v0114-ab-old.txt
 

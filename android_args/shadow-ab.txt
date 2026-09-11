@@ -1,0 +1,81 @@
+# Bisecting the shadow artefacts reported on Adreno 725 and 740 (issue #1).
+#
+# Two distinct symptoms are in the screenshots and they may not share a cause:
+#
+#   A. Enormous axis-aligned blocks of light and shade on flat ground, metres
+#      across, with hard straight edges. Far too coarse to be the texel size
+#      the settings ask for.
+#   B. Whole surfaces - bowl walls, the underside of ledges - rendered pure
+#      black rather than shaded.
+#
+# Every cvar here is hot-reloadable, so this runs on the build you already
+# have. Push it, relaunch, and photograph THE SAME TWO SPOTS each time:
+#
+#   scripts/push_args.sh android_args/shadow-ab.txt
+#   adb shell am force-stop com.nakas.skate3
+#   adb shell am start -n com.nakas.skate3/.SetupActivity
+#
+# Work down the list below, uncommenting exactly ONE block at a time. The
+# order is deliberate: it splits the two shadow systems apart first, because
+# that single answer decides which half of the renderer the rest of the search
+# is in.
+
+# The instruments. Leave these on for every run.
+skate3_native_render_scene_perf_log=false
+log_level=warn
+
+# ---------------------------------------------------------------------------
+# 1. Is it the static sun map at all?
+#
+# Turns off the whole enhanced-shadow system and leaves the game's own dynamic
+# cascades. If the blocks and the black surfaces BOTH go, everything after
+# this is about the static map. If the black surfaces stay, they are not a
+# shadow bug and this search is looking in the wrong place.
+# ---------------------------------------------------------------------------
+# skate3_native_render_scene_shadow_static_casters=false
+
+# ---------------------------------------------------------------------------
+# 2. Is it the resolution, or the sampling?
+#
+# Android forces 1024 per cascade, the smallest the renderer allows. At the
+# 180 m default radius that is 35 cm per texel on the far cascade - coarse,
+# but nowhere near the metres-wide blocks in the screenshot. If 4096 makes the
+# blocks 4x smaller, they ARE texels and the map is simply too small. If they
+# do not change size at all, the sampling is wrong and the resolution is a red
+# herring.
+# ---------------------------------------------------------------------------
+# skate3_native_render_scene_shadow_static_size=4096
+
+# ---------------------------------------------------------------------------
+# 3. Is it the cascade tiles bleeding into each other?
+#
+# The three cascades live side by side in one texture. Shrinking the radius
+# moves every cascade boundary without changing anything else, so if the hard
+# straight edges MOVE WITH IT they are tile edges, not geometry.
+# ---------------------------------------------------------------------------
+# skate3_native_render_scene_shadow_static_radius=60
+
+# ---------------------------------------------------------------------------
+# 4. Is it the depth comparison?
+#
+# Raises the receiver bias hard. Acne and self-shadowing collapse to nothing
+# at a large enough bias; a projection or addressing fault does not care.
+# If the black walls go white here, they were shadowing themselves.
+# ---------------------------------------------------------------------------
+# skate3_native_render_scene_shadow_static_bias=0.4
+
+# ---------------------------------------------------------------------------
+# 5. Is it PCSS?
+#
+# The blocker search reads a wide neighbourhood, so it is the part most likely
+# to read outside a cascade tile. Off falls back to fixed-width filtering.
+# ---------------------------------------------------------------------------
+# skate3_native_render_scene_shadow_pcss=false
+
+# ---------------------------------------------------------------------------
+# 6. Is it the dynamic atlas instead?
+#
+# Only if 1 said the static map is innocent. This turns the game's own
+# cascades off and leaves the enhanced ones.
+# ---------------------------------------------------------------------------
+# skate3_native_render_scene_shadows=false

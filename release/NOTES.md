@@ -44,6 +44,66 @@ antialiasing. Change one setting at a time.
 
 ## New in this release
 
+**0.1.21 — the reported bugs, and controls you can move.**
+
+*Title Update 3 now installs on a phone that could not take it.* A Samsung M53
+could not get it in by any route. Picking the file yourself died the instant it
+was chosen — the launcher hands the engine a file descriptor rather than a
+path, which is right for a seven-gigabyte disc image and wrong for this, whose
+reader opens the path again and fails a permission check it cannot pass. The
+package is 1.7 MB, so it is simply copied in now. Downloading it failed with
+502 Bad Gateway on eight attempts across four sessions, from a site that is not
+this project's and does go down; the download retries four times with backoff
+instead of twice, says so plainly when the site is the problem, and offers a
+copy you have already put in the folder rather than fetching it again.
+
+*The settings menu applies what you change.* Choosing something that needs a
+restart put a prompt on screen for four tenths of a second and then took it
+away again — the menu saved your choice, decided nothing was outstanding, and
+greyed out the button for applying it. Reported as a quarter-second window to
+hit Apply & Restart, which was almost exactly right. The menu now remembers
+that a restart is owed until you take it, and Revert goes back to what the
+session started with rather than to the change it just saved.
+
+*Audio Buffer Size can be changed.* It was written to the settings file and
+then overwritten by the launch arguments at every start, so the row snapped
+back and looked broken. It is the player's setting now, like the graphics rows
+already were.
+
+*One shadow setting instead of two.* "Shadow Quality" and "Enhanced Shadow
+Resolution" were two halves of the same decision, and the pairing that looks
+right was not discoverable by hand. They are one row of matched steps, and the
+steps a device cannot actually build are no longer offered — which is what went
+wrong at the top setting: it asked for a shadow map three times wider than the
+hardware allows, and the shadows disappeared entirely with nothing said. It is
+clamped to what the device reports now, and the log says what was asked for and
+what was granted.
+
+*The Performance page stopped repeating the Video page.* Ten settings appeared
+on both. It keeps the three that are worth turning while watching a frame time
+and points at Video for the rest.
+
+*The Level Picker works.* Its shortcut was the Guide button, which is delivered
+only when a setting nothing turns on is turned on, so it had never once opened
+for anybody. It is LB + Select now, it lists the map packs you have installed,
+and choosing one restarts the game on it.
+
+*The on-screen controls can be moved.* Drag any control where you want it, or
+pinch it to resize; the arrangement is remembered. There is also an opacity
+setting. Six of the buttons — Start, Back and the d-pad — were drawing as
+question marks, because their symbols were characters the font does not have.
+They are drawn as shapes now.
+
+*Switching away from the game.* Returning from the task switcher could leave
+the game painting but not playing: the event that reattaches the display is not
+reliably delivered, and a resume that arrived the other way left it unbound for
+good. Both events reattach now. Quitting is bounded at six seconds rather than
+taking as long as it takes, which also stops the relaunch after Apply & Restart
+arriving while the old process is still tearing down — the other half of that
+crash. And when Android kills the game in the background for its memory, which
+it will, the launcher now says so instead of leaving you to guess whether it
+crashed.
+
 **0.1.19 — the handhelds that never loaded the world now do.** Three devices
 built on the same Qualcomm chip, an AYN Thor, a Retroid Pocket 6 and an AYN
 Odin2 Portal, had never once reached the skatepark on any build. They sat on a

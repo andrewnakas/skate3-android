@@ -102,6 +102,41 @@ object GameData {
             -1L
         }
 
+    /**
+     * A marker file that exists only while a session is running.
+     *
+     * Android kills a backgrounded 3 GB process without telling anybody: no
+     * crash report, no native fault, no log line. The launcher simply appears
+     * again next time, which is exactly what an ordinary quit looks like - a
+     * tester reported it as "either frozen or crashed... it appears to just
+     * crash most of the time" and had no way to know which. The game clears
+     * this on its way out, so finding it on the next launch means the process
+     * did not leave under its own power.
+     */
+    private fun sessionMarker(context: Context) = File(userDir(context), "session.running")
+
+    fun markSessionRunning(context: Context, running: Boolean) {
+        try {
+            val marker = sessionMarker(context)
+            if (running) {
+                marker.parentFile?.mkdirs()
+                marker.writeText(System.currentTimeMillis().toString())
+            } else {
+                marker.delete()
+            }
+        } catch (_: Exception) {
+            // Best effort. A marker that cannot be written costs an
+            // explanation, never a session.
+        }
+    }
+
+    /** True when the last session ended without the game shutting down. */
+    fun lastSessionWasKilled(context: Context): Boolean = try {
+        sessionMarker(context).isFile
+    } catch (_: Exception) {
+        false
+    }
+
     fun describeFree(context: Context): String {
         val bytes = freeBytes(context)
         if (bytes < 0) return "free space unknown"
