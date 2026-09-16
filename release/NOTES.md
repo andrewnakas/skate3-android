@@ -44,6 +44,58 @@ antialiasing. Change one setting at a time.
 
 ## New in this release
 
+**0.1.22 — choose your GPU driver, and choose your map again.**
+
+*You can run a different GPU driver.* Nearly every hard bug in this port has
+turned out to be a bug in the phone's Vulkan driver rather than in the game:
+descriptor set limits, an illegal uniform layout, an Adreno refusing a shadow
+map three times wider than it allows, a driver claiming Vulkan 1.1 on hardware
+that plainly is newer. Until now the driver was the one thing a player could
+not change, so "is this the driver?" could only be argued about. Open **GPU
+driver** on the launcher, pick **Turnip T30**, and **Apply and restart**.
+Turnip is the open-source Adreno driver; MrPurple's T30 build ships in the app,
+and other Android ARM64 Turnip packages can be imported as ZIPs without
+installing another APK. **Check selected driver** loads it and reports the GPU
+and driver it actually got, without needing the game or any game files.
+
+The default is still your phone's own driver, so nothing changes unless you go
+looking. If a driver fails it says so and stays on the one you had — it never
+silently falls back. Whether Turnip helps or hurts depends on the device, and
+this release does not claim it is faster; it makes the question answerable.
+
+*You can choose which map pack to load again.* With more than one pack
+installed the game asks which to load at startup — except that using the
+in-game level picker once turned that screen off permanently. Picking a map
+there has to write the choice down so it survives the relaunch that applies it,
+and the startup screen only appeared when nothing was written. So it removed
+itself the first time it was used, with no way back except editing a file under
+Android/data that no file manager will open. Reported as not being able to
+choose a level at startup, which was exactly right. The chooser is back, there
+is a row on the System page to turn it off, and it still only ever appears when
+two or more packs are installed.
+
+*The on-screen control editor has a second way out.* Arranging the controls
+takes the pad away on purpose — a finger moves a button rather than pressing it
+— which also meant Start, Back and every chord were dead, and the gear was just
+another thing to drag. The Done button was the only way back to the game, so a
+player whose panel did not appear had nothing left but to force-close the app,
+and one did. Tapping the gear now leaves the editor too, saving as it goes.
+The settings row that opens it also no longer tells you to pinch to resize, or
+to reopen the menu to finish; neither of those has worked since the editor was
+redesigned.
+
+*The diagnostic report works on Android 9, 10 and 11.* It read a field that
+only exists on Android 12 and newer, and died while being written on anything
+older — on the one screen a player uses to tell us something is wrong.
+
+*The right stick keeps working while a text field has focus.* Typing a name
+could leave the stick dead, or turn it into d-pad presses.
+
+*Smaller download.* 38 MB rather than 91 MB, because the engine is now
+compressed inside the APK. It is unpacked at install time instead, so
+installing takes longer and the installed size grows by roughly the size of the
+engine — that trade is what lets a custom driver be loaded at all.
+
 **0.1.21 — the reported bugs, and controls you can move.**
 
 *Title Update 3 now installs on a phone that could not take it.* A Samsung M53
@@ -308,8 +360,12 @@ and no setting reduces how much the game simulates.
 
 ## Known rough edges
 
-- Several on-screen buttons draw a question mark instead of a label. The touch
-  overlay is missing glyphs for the d-pad and Back/Start.
+- Whether Turnip is better than your phone's own driver is untested and varies
+  by device. If a driver misbehaves, reopen the launcher and apply another; a
+  driver is only ever loaded after the app restarts, so the launcher is always
+  reachable.
+- The GPU driver manager has been verified on a Galaxy S23 FE and, by the fork
+  it came from, on a Retroid Pocket 6. Other devices are unproven.
 - The runtime logs a thread priority permission denial at startup. Android
   refuses the real-time scheduler to apps; it is harmless.
 - It looks for a controller mapping database in a system path that does not
@@ -323,9 +379,11 @@ and no setting reduces how much the game simulates.
 
 ## Building it yourself
 
-`scripts/build_native.sh` builds the native library from the engine tree, then
-`scripts/build_apk.sh` packages it. The native build takes hours and needs your
-own game files, since the recompiler consumes them. See the repository README.
+`scripts/build_native.sh` builds the native library from the engine tree,
+`scripts/build_driver_proxy.sh` builds the Vulkan driver proxy (seconds, and
+only when `native/` changes), then `scripts/build_apk.sh` packages both. The
+native build takes hours and needs your own game files, since the recompiler
+consumes them. See the repository README.
 
 ## Credits
 
