@@ -39,13 +39,16 @@ object Diagnostics {
         appendLine("Native library ${nativeLibraryDescription(context)}")
         appendLine()
 
+        appendLine(DriverBridge.diagnostic(context))
+        appendLine()
+
         appendLine(section("Device"))
         appendLine("${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})")
         appendLine("Android ${Build.VERSION.RELEASE}, API ${Build.VERSION.SDK_INT}")
         // The distinction the report is often being read for: a custom ROM
         // reports a different build fingerprint from the vendor's own.
         appendLine("Build ${Build.FINGERPRINT}")
-        appendLine("SoC ${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}")
+        appendLine("SoC ${socName()}")
         appendLine("ABIs ${Build.SUPPORTED_ABIS.joinToString()}")
         appendLine("CPUs ${Runtime.getRuntime().availableProcessors()}")
         appendLine(cpuClusters())
@@ -139,6 +142,19 @@ object Diagnostics {
         file.writeText(collect(context))
         return file
     }
+
+    /**
+     * The chip, named by the most specific source this Android version has.
+     *
+     * Build.SOC_MANUFACTURER and Build.SOC_MODEL were added in API 31. minSdk
+     * here is 28, and reading a field that does not exist throws
+     * NoSuchFieldError rather than returning null - so on Android 9, 10 and 11
+     * the unguarded read killed the report. That is the one path a tester on an
+     * old device uses to tell us anything at all.
+     */
+    internal fun socName(): String =
+        if (Build.VERSION.SDK_INT >= 31) "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}"
+        else Build.HARDWARE
 
     private fun section(title: String) = "===== $title " + "=".repeat(maxOf(4, 60 - title.length))
 

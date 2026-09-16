@@ -6,9 +6,12 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.util.Log
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import org.libsdl.app.SDLActivity
+import org.libsdl.app.SDLControllerManager
 
 /**
  * The game itself.
@@ -19,6 +22,24 @@ import org.libsdl.app.SDLActivity
  * Java for: the system document picker, and relaunching after a setting change.
  */
 class Skate3Activity : SDLActivity() {
+
+    /**
+     * Picks the Vulkan driver, before anything can ask for one.
+     *
+     * SDL calls this after onCreate and before it resolves any engine entry
+     * point, from inside its own startup error handler - so a driver that will
+     * not load surfaces as a message on screen rather than a silent death. The
+     * ordering is the whole trick: the engine opens Vulkan by bare name at
+     * runtime, so whatever holds the libvulkan.so SONAME by the time it does
+     * that is what it gets. See native/PROVENANCE.md.
+     *
+     * With the system driver selected this does nothing at all and the engine
+     * resolves the platform loader exactly as it always has.
+     */
+    override fun loadLibraries() {
+        DriverBridge.initialize(this)
+        super.loadLibraries()
+    }
 
     /**
      * One shared object. SDL3 and the rexglue runtime are linked statically
@@ -95,6 +116,30 @@ class Skate3Activity : SDLActivity() {
     override fun onDestroy() {
         GameData.markSessionRunning(this, false)
         super.onDestroy()
+    }
+
+    /**
+     * Catches stick movement the view hierarchy did not take.
+     *
+     * SDL hangs its motion listener on the SurfaceView alone (SDLSurface line
+     * 68), so anything else with focus - the on-screen keyboard's input view,
+     * most obviously - swallows the event before the surface sees it. Android
+     * then helpfully converts stick X/Y into d-pad keys and the right stick
+     * stops existing. SDL's own listener also compares the source with == to
+     * SOURCE_JOYSTICK, which a pad reporting JOYSTICK|GAMEPAD|DPAD fails; this
+     * asks the same question the way that works for a combined mask.
+     *
+     * This runs only after every view has declined the event, so SDL still
+     * receives each one exactly once.
+     */
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        if (!SDLActivity.mBrokenLibraries &&
+            event.isFromSource(InputDevice.SOURCE_CLASS_JOYSTICK) &&
+            SDLControllerManager.handleJoystickMotionEvent(event)
+        ) {
+            return true
+        }
+        return super.onGenericMotionEvent(event)
     }
 
     private fun hideSystemBars() {
