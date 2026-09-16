@@ -36,6 +36,9 @@ class SetupActivity : Activity() {
     private lateinit var titleUpdateButton: Button
     private lateinit var pickTitleUpdateButton: Button
     private lateinit var useLocalTuButton: Button
+    private lateinit var driverButton: Button
+    private lateinit var checkDriverButton: Button
+    private lateinit var driverStatus: TextView
     @Volatile private var busy = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,6 +110,12 @@ class SetupActivity : Activity() {
             setPadding(0, pad / 2, 0, 0)
         }
         left.addView(status)
+        driverStatus = TextView(this).apply {
+            textSize = 13f
+            setTextColor(Color.parseColor("#9ED8F5"))
+            setPadding(0, pad / 2, 0, 0)
+        }
+        left.addView(driverStatus)
         root.addView(ScrollView(this).apply { addView(left) },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
 
@@ -124,6 +133,10 @@ class SetupActivity : Activity() {
         pickTitleUpdateButton = button("Pick the title update file…") { pick(REQUEST_TU) }
         actions.addView(pickTitleUpdateButton)
         actions.addView(button("Map packs…") { showMapPacks() })
+        driverButton = button("GPU driver…") { showDrivers() }
+        actions.addView(driverButton)
+        checkDriverButton = button("Check selected driver") { checkDriver() }
+        actions.addView(checkDriverButton)
         actions.addView(button("Copy the details") { copyDiagnostics() })
         actions.addView(button("Save a diagnostic report") { saveReport() })
         root.addView(ScrollView(this).apply { addView(actions) },
@@ -208,6 +221,39 @@ class SetupActivity : Activity() {
         }
         playButton.isEnabled = ready
         playButton.alpha = if (ready) 1f else 0.4f
+        driverButton.text = "GPU driver: ${DriverBridge.label(this, DriverBridge.selected(this))}"
+        driverStatus.text = DriverBridge.status(this)
+    }
+
+    private fun showDrivers() {
+        if (busy) return
+        startActivity(Intent(this, DriverManagerActivity::class.java))
+    }
+
+    /**
+     * Loads the selected driver here rather than at the start of a game.
+     *
+     * Worth having because it needs no game files: a tester can find out
+     * whether Turnip comes up on their device before spending 7 GB finding out
+     * the other way. The selection is pinned to the process once this runs, so
+     * changing driver afterwards asks for a restart - which is what the driver
+     * screen does anyway.
+     */
+    private fun checkDriver() {
+        if (busy) return
+        busy = true
+        checkDriverButton.isEnabled = false
+        driverStatus.text = "Checking ${DriverBridge.label(this, DriverBridge.selected(this))}…"
+        Thread {
+            val checked = runCatching { DriverBridge.initialize(this) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                busy = false
+                checkDriverButton.isEnabled = true
+                refresh()
+                checked.exceptionOrNull()?.let { driverStatus.text = it.message }
+            }
+        }.start()
     }
 
     /**
@@ -664,6 +710,11 @@ class SetupActivity : Activity() {
     }
 
     private fun startGame(extraArgs: List<String> = emptyList()) {
+        // Every other action on this screen already refuses while one is in
+        // flight. Play did not, and now that a driver check can be running it
+        // matters: initialize() is synchronized, so starting the game mid-check
+        // would block the launch on it rather than fail, which looks like a hang.
+        if (busy) return
         GameData.userDir(this).mkdirs()
         GameData.gameDir(this).mkdirs()
         val root = GameData.root(this)
@@ -759,7 +810,7 @@ class SetupActivity : Activity() {
         val text = buildString {
             appendLine("${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})")
             appendLine("Android ${Build.VERSION.RELEASE}, API ${Build.VERSION.SDK_INT}")
-            appendLine("SoC ${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}")
+            appendLine("SoC ${Diagnostics.socName()}")
             appendLine("ABIs ${Build.SUPPORTED_ABIS.joinToString()}")
             appendLine("RAM ${info.totalMem / (1024 * 1024)} MB")
             appendLine("Game files ${GameData.gameDir(this@SetupActivity)}")

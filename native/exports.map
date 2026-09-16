@@ -1,0 +1,14 @@
+{
+  global:
+    JNI_OnLoad;
+    Java_com_nakas_skate3_DriverBridge_nativeInit;
+    Java_com_nakas_skate3_DriverBridge_nativeStatus;
+    vkGetInstanceProcAddr;
+    vkGetDeviceProcAddr;
+    vkCreateInstance;
+    vkDestroyInstance;
+    vkEnumerateInstanceVersion;
+    vkEnumerateInstanceExtensionProperties;
+    vkEnumerateInstanceLayerProperties;
+  local: *;
+};

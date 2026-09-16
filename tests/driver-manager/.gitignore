@@ -1,0 +1,15 @@
+/.gradle/
+/build/
+/app/build/
+/generated/
+/app/src/main/assets/
+/app/src/production/
+/local.properties
+/build-inputs.json
+/build-verification.json
+/device-*.json
+/device-*.txt
+/*.log
+*.apk
+*.zip
+__pycache__/

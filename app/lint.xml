@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SDL's Java is compiled from the engine tree (see sdlJavaDir in
+  build.gradle.kts) rather than vendored here, so its findings are upstream's to
+  fix, not ours. A lint baseline could not name those files portably - the path
+  comes from local.properties and differs per machine - so the exclusion matches
+  on the package instead. Everything in this repository stays checked.
+
+  Worth knowing about, all real and all upstream's:
+    NewApi                          SDLControllerManager.isExternal() needs API 29, minSdk is 28
+    MissingPermission               HIDDeviceManager reads BluetoothDevice.getName()
+    UnspecifiedRegisterReceiverFlag HIDDeviceManager registers an unprotected broadcast
+    UnsafeImplicitIntentLaunch      SDLActivity launches an implicit intent
+-->
+<lint>
+    <issue id="all">
+        <ignore regexp="org/libsdl/app/" />
+    </issue>
+</lint>

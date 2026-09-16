@@ -24,28 +24,58 @@ through Vulkan directly.
 
 | Path | What |
 |---|---|
-| `app/src/main/java/com/nakas/skate3/` | The four classes: setup, the game activity, the restart helper, and where the files live |
+| `app/src/main/java/com/nakas/skate3/` | Setup, the game activity, the restart helper, map packs, GPU drivers, and where the files live |
 | `app/src/main/jniLibs/arm64-v8a/libmain.so` | Built by `scripts/build_native.sh`, not by Gradle. Not in version control |
+| `native/` | The Vulkan driver proxy and vendored libadrenotools, built by `scripts/build_driver_proxy.sh`. See `native/PROVENANCE.md` |
+| `tests/driver-manager/` | Standalone instrumentation project for the driver importer. Needs a device |
 | `android_args/` | Tuning profiles pushed to the phone without rebuilding |
 | `scripts/` | Toolchain setup, build, install, logs, performance |
 | `logs/` | Pulled logs, one directory per run |
 
-Gradle never runs CMake. The native build is 7.7 million lines of recompiled
-PowerPC and takes hours; hiding that inside an APK build would also bypass the
-memory throttling it needs on a laptop. The two are separate on purpose:
-`build_native.sh` once, `build_apk.sh` as often as you like.
+Gradle never runs CMake; it only packages what the scripts have already built.
+The engine is 7.7 million lines of recompiled PowerPC and takes hours, and
+hiding that inside an APK build would bypass the memory throttling it needs on a
+laptop. The driver proxy is kept out for consistency rather than cost - it takes
+seconds. So: `build_native.sh` once, `build_driver_proxy.sh` when `native/`
+changes, `build_apk.sh` as often as you like.
 
 ## Building
 
 ```sh
-scripts/setup_sdk.sh        # once: command-line tools, platform, build tools, NDK
-scripts/build_native.sh     # hours. Safe to leave; it pauses when memory is short
+scripts/setup_sdk.sh           # once: command-line tools, platform, build tools, NDK
+scripts/build_native.sh        # hours. Safe to leave; it pauses when memory is short
+scripts/build_driver_proxy.sh  # minutes. Only needs redoing when native/ changes
 scripts/build_apk.sh
 scripts/install.sh
 ```
 
 `local.properties` names the SDK and the engine tree. Both are machine-specific
 and neither is in version control.
+
+## GPU drivers
+
+Most of the hard bugs in this port have been Qualcomm driver bugs rather than
+engine bugs, and until now there was no way to take the driver out of the
+picture. The launcher can now run a Mesa **Turnip** build instead of the one
+baked into the phone: **GPU driver…**, pick one, **Apply and restart**.
+
+MrPurple's T30 ships in the APK. Other Android ARM64 Turnip builds can be
+imported as `.adpkg` ZIPs, left compressed; the importer checks the archive
+structure, the metadata and the ELF before anything is allowed to load. A
+selection is fixed for the life of a process, which is why changing it restarts
+the app.
+
+The default is the device's own driver, so nothing changes for anyone who does
+not go looking. When a device misbehaves, switching to Turnip and back is now a
+one-minute experiment rather than a rebuild.
+
+This is why native libraries are extracted at install time rather than mapped
+from the APK: libadrenotools needs real files on disk. The download is smaller
+as a result and the installed footprint is larger. See `native/PROVENANCE.md`.
+
+The driver manager and the proxy come from Alan Constantino's
+[skate3-pocket](https://github.com/AlanConstantino/skate3-pocket), a fork of
+this app; the licences are in the APK, under **Driver licences**.
 
 ## Getting the game onto the phone
 

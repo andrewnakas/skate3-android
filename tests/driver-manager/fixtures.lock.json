@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "drivers": {
+    "t30": {
+      "filename": "mrpurple-t30.zip",
+      "url": "https://github.com/MrPurple666/purple-turnip/releases/download/vturnip_mrpurple_T30-toasted.adpkg/turnip_mrpurple_T30-toasted.adpkg.zip",
+      "sha256": "f65b2d3353fd4aa7190bb5426b94468e99ffea7a58a830bc0c4651db89353227",
+      "bytes": 3713730
+    },
+    "r7": {
+      "filename": "Turnip_v26.0.0_R7.zip",
+      "url": "https://github.com/K11MCH1/AdrenoToolsDrivers/releases/download/v26.0.0-rc07/Turnip_v26.0.0_R7.zip",
+      "sha256": "e6e10ef71c31b6117ba5163f48a873b7d32e66a687e8c2d06c407cc740d97387",
+      "bytes": 3481059,
+      "release": "https://github.com/K11MCH1/AdrenoToolsDrivers/releases/tag/v26.0.0-rc07",
+      "source_api": "https://api.github.com/repos/K11MCH1/AdrenoToolsDrivers/releases/272832284"
+    }
+  }
+}

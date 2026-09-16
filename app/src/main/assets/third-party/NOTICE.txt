@@ -1,0 +1,113 @@
+================================================================================
+GPU driver support - third-party notices
+================================================================================
+
+This app can load a Vulkan driver other than the one built into the device. The
+components below are redistributed inside the APK or compiled into it. Nothing
+here covers the game itself, which is not distributed with this app.
+
+
+================================================================================
+Mesa / Turnip - assets/drivers/turnip-t30.zip
+================================================================================
+
+The bundled "Turnip T30" driver is an unmodified copy of a build published by
+MrPurple666:
+
+    https://github.com/MrPurple666/purple-turnip
+    release  vturnip_mrpurple_T30-toasted.adpkg
+    sha256   f65b2d3353fd4aa7190bb5426b94468e99ffea7a58a830bc0c4651db89353227
+
+It reports itself as Mesa 26.3.0-T30-1.4.359. Turnip is the open-source Vulkan
+driver for Qualcomm Adreno hardware and is part of Mesa.
+
+    https://docs.mesa3d.org/drivers/freedreno.html
+
+Mesa is licensed per component rather than as a whole, and this binary is
+redistributed as published, without its source tree. Mesa's own licensing
+documentation is the authoritative statement for it:
+
+    https://docs.mesa3d.org/license.html
+
+No blanket licence is asserted here on Mesa's behalf, and no claim is made that
+every transitive dependency of that binary has been audited.
+
+Any driver a player imports themselves is their own file. It is not
+redistributed by this app and is not covered by this notice.
+
+
+================================================================================
+libadrenotools - Billy Laws
+================================================================================
+
+Loading a custom driver at all is libadrenotools' work. Vendored under
+native/vendor/libadrenotools from
+https://github.com/bylaws/libadrenotools at 8fae8ce.
+
+BSD 2-Clause License
+
+Copyright (c) 2021, Billy Laws
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+================================================================================
+liblinkernsbypass - Billy Laws
+================================================================================
+
+The linker namespace support libadrenotools builds on. Vendored under
+native/vendor/libadrenotools/lib/linkernsbypass from
+https://github.com/bylaws/liblinkernsbypass at aa39758.
+
+BSD 2-Clause License
+
+Copyright (c) 2021, Billy Laws
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+================================================================================
+Skate 3 Pocket - Alan Constantino
+================================================================================
+
+The Vulkan driver proxy (native/driver_proxy.cpp) and the driver import and
+selection code were taken from https://github.com/AlanConstantino/skate3-pocket,
+itself a fork of this app. See native/PROVENANCE.md.

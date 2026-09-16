@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="Driver Manager Regression" android:allowBackup="false" />
+    <instrumentation android:name="com.nakas.skate3.drivertests.DriverStoreInstrumentation"
+        android:targetPackage="com.nakas.skate3.drivertests" android:label="Production driver store regression" />
+</manifest>

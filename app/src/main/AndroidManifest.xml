@@ -22,7 +22,6 @@
         android:appCategory="game"
         android:hardwareAccelerated="true"
         android:largeHeap="true"
-        android:extractNativeLibs="false"
         android:theme="@style/Theme.Skate3">
 
         <!-- Lets `adb shell simpleperf` sample this process. Profiling only -
@@ -42,6 +41,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Choosing and importing a Vulkan driver. Lives in the launcher
+             because a driver is fixed for the life of a process: it can only
+             be changed from a screen that is able to restart the app. -->
+        <activity
+            android:name=".DriverManagerActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode" />
 
         <!-- The game. singleTask because relaunching over a live session would
              abandon the SurfaceView the running SDL thread still holds. -->
@@ -79,11 +87,17 @@
                 <!-- Applying a setting that needs a restart: this runs in its own
              process, so it survives the game process exiting and can start it
              again. -->
+        <!-- Translucent rather than Theme.NoDisplay: a NoDisplay activity is
+             required to finish before onResume completes, and this one stays
+             alive up to 15 seconds watching for the game process to exit. The
+             fork this was taken from hit a crash on that contract with a delay
+             of well under a second. Translucent is equally invisible and has
+             no such rule. -->
         <activity
             android:name=".RestartActivity"
             android:exported="false"
             android:process=":restart"
-            android:theme="@android:style/Theme.NoDisplay"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true" />
     </application>
 </manifest>
