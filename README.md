@@ -122,6 +122,23 @@ Android 16. arm64 only, Vulkan only. The `android-arm64-release` preset tunes
 the guest code for that CPU; `android-arm64-generic` builds the same thing for
 any 64-bit phone from about 2018 onward and is what a shared APK should use.
 
+## Credits
+
+The GPU driver manager — the Vulkan driver proxy, the driver importer and its
+verification, and the selection UI — is **Alan Constantino's** work, from
+[skate3-pocket](https://github.com/AlanConstantino/skate3-pocket), his
+handheld-focused fork of this app where it was written and tested on a Retroid
+Pocket 6. `native/driver_proxy.cpp` is kept byte-identical to his copy so that a
+change on either side reads as a diff rather than an archaeology exercise; see
+`native/PROVENANCE.md`.
+
+It stands on **Billy Laws'** [libadrenotools](https://github.com/bylaws/libadrenotools)
+and liblinkernsbypass for loading a driver at all, on **Mesa/Turnip** for the
+driver, and on the **MrPurple** Turnip builds for the one that ships here.
+
+The engine is Alex McHugh's Skate 3 recompilation and the rexglue SDK, itself
+derived from the Xenia project's Xbox 360 research.
+
 ## Supporting the project
 
 If you like this software, you can support the work with a donation. It is

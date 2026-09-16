@@ -44,6 +44,21 @@ antialiasing. Change one setting at a time.
 
 ## New in this release
 
+**0.1.23 — the settings menu tells you when a restart is owed.**
+
+Resolution, MSAA, shadows, aspect ratio, language and audio buffer size are
+only read when the game starts, so changing one and leaving the menu does
+nothing visible until it restarts. There was an Apply row that said so, but
+nothing stood in the way of making a change and simply backing out — which is
+what most people do, and they reasonably concluded the setting was broken.
+
+Leaving the menu with one outstanding now says so, whichever way you leave:
+Back, the chord, or the gear. Declining closes the menu anyway, because
+leaving is what you asked for, and it only asks once per pending restart rather
+than every single time.
+
+Everything from 0.1.22 below is also in this build.
+
 **0.1.22 — choose your GPU driver, and choose your map again.**
 
 *You can run a different GPU driver.* Nearly every hard bug in this port has
@@ -390,3 +405,16 @@ consumes them. See the repository README.
 Built on the Skate 3 native recompilation and the rexglue SDK, which is derived
 from Xenia's Xbox 360 research. The Android shell, platform work and tuning in
 this release are new; the iOS port shares the same engine.
+
+**Alan Constantino** ([skate3-pocket](https://github.com/AlanConstantino/skate3-pocket))
+wrote the GPU driver manager: the Vulkan driver proxy, the driver importer and
+its verification, and the selection UI, first released in his handheld-focused
+fork of this app and tested there on a Retroid Pocket 6. It is his work, adopted
+here with the default left on the device's own driver. `native/driver_proxy.cpp`
+is kept byte-identical to his so that changes on either side stay readable as a
+diff.
+
+Custom driver loading rests on **Billy Laws'**
+[libadrenotools](https://github.com/bylaws/libadrenotools) and liblinkernsbypass,
+and the drivers themselves on **Mesa/Turnip** and the **MrPurple** builds. Full
+licences ship in the app under **Driver licences**.
