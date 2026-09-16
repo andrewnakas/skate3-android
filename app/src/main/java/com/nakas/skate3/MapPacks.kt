@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import java.io.File
+import java.io.InputStream
+import java.util.zip.ZipInputStream
 
 /**
  * Custom map packs, and getting one onto the phone without a file manager.
@@ -206,6 +208,167 @@ object MapPacks {
         return describe(dest, dest) ?: throw PackError(
             "The pack was copied to ${dest.absolutePath} but does not look complete."
         )
+    }
+
+    /**
+     * The same install, from a .zip.
+     *
+     * Packs are distributed zipped, so the folder route asks the player to
+     * extract one first - on a phone, with whatever archive app they have, into
+     * a folder they then have to find again in the picker. Two steps that can
+     * each go wrong, before the step that actually matters. The install message
+     * even said "if the pack is still in a zip or a rar, extract it first",
+     * which is an instruction to go and do the app's job by hand.
+     *
+     * Unlike the folder route this extracts FIRST and reads the header
+     * afterwards. A zip is a stream: reaching the header entry means
+     * decompressing everything before it, so checking the header first would
+     * mean doing that work twice for a pack that is usually a couple of hundred
+     * megabytes. Everything lands in a staging folder under names this code
+     * chooses, so a hostile archive cannot write outside it whatever its
+     * entries are called.
+     */
+    fun installZip(context: Context, zip: Uri, progress: (Long, Long) -> Unit): Pack {
+        val root = GameData.root(context)
+        val staging = File(root, ".zipstage")
+        staging.deleteRecursively()
+        if (!staging.mkdirs()) {
+            throw PackError("A staging folder could not be created:\n${staging.absolutePath}")
+        }
+
+        // Declared up front where the picker knows it, so a pack that cannot
+        // fit fails before it has written a gigabyte of it.
+        val declared = runCatching {
+            context.contentResolver.openFileDescriptor(zip, "r")?.use { it.statSize }
+        }.getOrNull() ?: -1L
+        val free = GameData.freeBytes(context)
+        // Twice the archive: the extracted pack plus the archive's own copy on
+        // the way through. Crude, and crude in the safe direction.
+        if (declared > 0 && free in 0 until declared * 2 + SPACE_MARGIN) {
+            staging.deleteRecursively()
+            throw PackError(
+                "There may not be enough room. The zip is ${mb(declared)} and there is " +
+                    "${mb(free)} free; a pack needs roughly twice the zip while it installs."
+            )
+        }
+
+        try {
+            var bigPart: File? = null
+            var headerPart: File? = null
+            var copied = 0L
+            val stream = context.contentResolver.openInputStream(zip)
+                ?: throw PackError("That zip could not be opened.")
+            ZipInputStream(stream.buffered()).use { zin ->
+                while (true) {
+                    val entry = zin.nextEntry ?: break
+                    if (entry.isDirectory) continue
+                    // The basename only. An entry called "../../evil" names
+                    // nothing here: the destination is chosen below from the
+                    // extension, never from the archive.
+                    val base = entry.name.substringAfterLast('/').substringAfterLast('\\')
+                    // Archive tools scatter these through a zip made on a Mac,
+                    // and one of them is a file called ._something.big.
+                    if (base.startsWith("._") || entry.name.startsWith("__MACOSX")) continue
+                    val ext = base.substringAfterLast('.', "").lowercase()
+                    if (ext != "big" && ext != "header") continue
+                    if (ext == "big" && bigPart != null) {
+                        throw PackError(
+                            "That zip holds more than one pack (two or more .big files).\n\n" +
+                                "The game loads one at a time. Zip each pack on its own."
+                        )
+                    }
+                    if (ext == "header" && headerPart != null) continue  // keep the first
+                    val part = File(staging, "$ext.part")
+                    part.outputStream().use { output ->
+                        val buffer = ByteArray(1 shl 16)
+                        while (true) {
+                            val read = zin.read(buffer)
+                            if (read <= 0) break
+                            output.write(buffer, 0, read)
+                            copied += read
+                            // The uncompressed total is not known up front for
+                            // a streamed zip, so this reports against the
+                            // archive's own size: it runs slightly ahead of
+                            // itself, which beats a bar that does not move.
+                            progress(copied, if (declared > 0) declared else copied)
+                        }
+                        output.fd.sync()
+                    }
+                    if (ext == "big") bigPart = part else headerPart = part
+                }
+            }
+
+            val big = bigPart ?: throw PackError(
+                "There is no .big file in that zip.\n\nIt may be a zip of a zip, or an " +
+                    "archive this app cannot read - a .rar or a .7z has to be extracted first."
+            )
+            val head = headerPart ?: throw PackError(
+                "That zip has a .big file but no .header file.\n\nThe game needs both: " +
+                    "the .header is what describes the pack, and content without it is " +
+                    "ignored without a word."
+            )
+
+            val header = readHeader(head.readBytes().take(HEADER_SIZE).toByteArray())
+                ?: throw PackError(
+                    "The .header in that zip is shorter than the $HEADER_SIZE bytes a whole " +
+                        "one is.\n\nIt looks truncated - the download did not finish."
+                )
+            if (header.titleId != 0 && header.titleId != ANY_TITLE &&
+                header.titleId != SKATE3_TITLE) {
+                throw PackError(
+                    String.format(
+                        "That pack is for another game.%n%nIts header names title %08X, and " +
+                            "Skate 3 is %08X.", header.titleId, SKATE3_TITLE
+                    )
+                )
+            }
+            // As in the folder route: the header names the folder, because the
+            // game looks the pack up by the name recorded inside it.
+            val name = usableName(header.fileName)
+                ?: usableName(zipBaseName(context, zip))
+                ?: throw PackError("That pack does not have a usable name in its header.")
+
+            val dest = File(root, name)
+            dest.mkdirs()
+            if (!dest.isDirectory) {
+                throw PackError("The folder for the pack could not be created:\n${dest.absolutePath}")
+            }
+            clearParts(dest)
+            for (old in dest.listFiles() ?: emptyArray()) {
+                if (old.isFile && old.extension.lowercase() in setOf("big", "header")) old.delete()
+            }
+            // Header first, .big last, for the same reason as the folder route:
+            // a launch landing mid-install sees a folder that is not yet a pack
+            // rather than half of one.
+            val headerTarget = File(dest, "$name.header")
+            val bigTarget = File(dest, "$name.big")
+            if (!head.renameTo(headerTarget) || !big.renameTo(bigTarget)) {
+                throw PackError("The pack could not be moved into place:\n${dest.absolutePath}")
+            }
+            return describe(dest, dest) ?: throw PackError(
+                "The pack was extracted to ${dest.absolutePath} but does not look complete."
+            )
+        } catch (e: Exception) {
+            throw if (e is PackError) e else PackError(
+                "That zip could not be installed.\n\n${e.message ?: e.toString()}"
+            )
+        } finally {
+            staging.deleteRecursively()
+        }
+    }
+
+    /** The zip's own filename, as a last resort for naming a pack. */
+    private fun zipBaseName(context: Context, zip: Uri): String? = try {
+        context.contentResolver.query(zip, null, null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (index >= 0 && cursor.moveToFirst()) {
+                cursor.getString(index)?.substringBeforeLast('.')
+            } else {
+                null
+            }
+        }
+    } catch (_: Exception) {
+        null
     }
 
     /**

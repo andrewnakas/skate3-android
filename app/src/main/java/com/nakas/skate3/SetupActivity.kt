@@ -316,7 +316,7 @@ class SetupActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_ISO && requestCode != REQUEST_TU &&
-            requestCode != REQUEST_PACK) {
+            requestCode != REQUEST_PACK && requestCode != REQUEST_PACK_ZIP) {
             return
         }
         val uri = data?.data
@@ -328,6 +328,10 @@ class SetupActivity : Activity() {
         // copying itself - there is no descriptor to hand the engine.
         if (requestCode == REQUEST_PACK) {
             installMapPack(uri)
+            return
+        }
+        if (requestCode == REQUEST_PACK_ZIP) {
+            installMapPackZip(uri)
             return
         }
         // The title update is copied; the disc image is read where it lies.
@@ -451,7 +455,7 @@ class SetupActivity : Activity() {
                         "there by a file manager usually belong to the file manager, and " +
                         "the game is not allowed to read them."
                 )
-                .setPositiveButton("Choose a pack folder…") { _, _ -> pickMapPack() }
+                .setPositiveButton("Install a pack…") { _, _ -> chooseMapPackSource() }
                 .setNegativeButton("Cancel", null)
                 .show()
             return
@@ -464,10 +468,47 @@ class SetupActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle(if (packs.size == 1) "1 map pack installed" else "${packs.size} map packs installed")
             .setItems(labels.toTypedArray()) { _, which ->
-                if (which == packs.size) pickMapPack() else confirmRemoveMapPack(packs[which])
+                if (which == packs.size) chooseMapPackSource() else managePack(packs[which])
             }
             .setNegativeButton("Close", null)
             .show()
+    }
+
+    /**
+     * Which kind of thing the pack is arriving as.
+     *
+     * Packs are distributed zipped, so asking for a folder means asking the
+     * player to extract one first with whatever archive app they happen to
+     * have, then find the result in a picker. Both routes are here, and the
+     * zip is listed first because it is what people actually have.
+     */
+    private fun chooseMapPackSource() {
+        AlertDialog.Builder(this)
+            .setTitle("Install a map pack")
+            .setItems(arrayOf("From a .zip file", "From a folder")) { _, which ->
+                if (which == 0) pickMapPackZip() else pickMapPack()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun pickMapPackZip() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            // Not "application/zip" alone: providers label a downloaded zip
+            // every way there is - octet-stream, x-zip-compressed, sometimes
+            // nothing at all - and a strict filter greys out the very file the
+            // player is looking at. The archive is validated when it is read.
+            type = "*/*"
+        }
+        try {
+            startActivityForResult(
+                Intent.createChooser(intent, "Select the map pack zip"), REQUEST_PACK_ZIP
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "no file picker available", e)
+            status.text = "This device has no file picker available."
+        }
     }
 
     private fun pickMapPack() {
@@ -527,6 +568,75 @@ class SetupActivity : Activity() {
                 )
             }
         }.start()
+    }
+
+    /** The same, from a zip. Extraction is the slow part, so it reports too. */
+    private fun installMapPackZip(zip: Uri) {
+        if (busy) return
+        busy = true
+        status.text = "Installing the map pack\u2026"
+        Thread {
+            var lastShown = -1L
+            val outcome = runCatching {
+                MapPacks.installZip(this, zip) { copied, total ->
+                    val percent = if (total > 0) copied * 100 / total else 0
+                    if (percent != lastShown) {
+                        lastShown = percent
+                        runOnUiThread {
+                            status.text = "Installing the map pack\u2026 ${percent.coerceAtMost(99)}%"
+                        }
+                    }
+                }
+            }
+            runOnUiThread {
+                busy = false
+                outcome.fold(
+                    onSuccess = { pack ->
+                        refresh()
+                        status.text = buildString {
+                            appendLine("Installed ${pack.name}.")
+                            pack.displayName?.takeIf { it != pack.name }?.let { appendLine(it) }
+                            appendLine()
+                            appendLine(
+                                "It is staged into the game the next time you press Play. " +
+                                    "If more than one pack is installed, the game asks which " +
+                                    "one to load - and you can switch between them from the " +
+                                    "settings menu while playing."
+                            )
+                        }
+                    },
+                    onFailure = { e ->
+                        refresh()
+                        status.text = "The map pack was not installed.\n\n" +
+                            (e.message ?: e.toString())
+                    }
+                )
+            }
+        }.start()
+    }
+
+    /**
+     * What you can do with one installed pack.
+     *
+     * Tapping a pack in the list used to go straight to "Remove X?", which is a
+     * confirmation for something nobody asked for - the obvious reason to tap a
+     * pack is to look at it, and the destructive option should be a choice on
+     * the way rather than the only thing behind the tap.
+     */
+    private fun managePack(pack: MapPacks.Pack) {
+        val detail = buildString {
+            pack.displayName?.takeIf { it != pack.name }?.let { appendLine(it) }
+            appendLine(MapPacks.mb(pack.bytes))
+            appendLine()
+            appendLine(pack.topDir.absolutePath)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(pack.name)
+            .setMessage(detail)
+            .setPositiveButton("Remove\u2026") { _, _ -> confirmRemoveMapPack(pack) }
+            .setNeutralButton("Install another\u2026") { _, _ -> chooseMapPackSource() }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     /**
@@ -597,6 +707,7 @@ class SetupActivity : Activity() {
         private const val REQUEST_ISO = 0x5301
         private const val REQUEST_TU = 0x5302
         private const val REQUEST_PACK = 0x5303
+        private const val REQUEST_PACK_ZIP = 0x5304
     }
 
     /**
