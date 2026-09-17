@@ -1,0 +1,27 @@
+# Sustained-frame-time measurement. Pushed to watch the frame rate decay over a
+# long session and find out what grows with it.
+#
+# DELIBERATELY MINIMAL. Every key in this file replaces the compiled-in default
+# and BEATS the in-game settings menu, so a key left here silently pins a
+# setting a later run is trying to A/B. The only keys here are the ones that
+# decide what gets written to the log; everything the renderer actually does
+# stays at whatever the build and the player's own settings chose. Do not add
+# tuning lines - copy baseline.txt for that.
+#
+# This is NOT skate3_diagnostics=true. That switch also turns on per-frame
+# accounting that bills the frame path, and the whole point of this run is to
+# measure the frame path. The lines below are ordinary INFO and are not gated
+# on the diagnostics switch; only the log level was standing in their way.
+#
+#   scripts/push_args.sh android_args/sustained.txt
+#   ... play ...
+#   scripts/push_args.sh --clear     <- do not forget this
+
+# The shipped level is warn, which hides every line below.
+log_level=info
+
+# The per-window scene breakdown: guest_fps, and the frame split across
+# capture / build / render / items / shadow / tail / 2d / decode / commit.
+# One line per 600 frames. The accounting behind it runs whether or not the
+# line is printed, so switching it on costs the formatting and nothing else.
+skate3_native_render_scene_perf_log=true

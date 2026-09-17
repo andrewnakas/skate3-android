@@ -1,0 +1,42 @@
+# Measure the frame, not the cap. Short run, from a cold phone.
+#
+# WHY EVERY NUMBER SO FAR HAS BEEN BLUNT. The panel is pinned to 60 Hz and the
+# presenter runs FIFO, so a frame is shown after a WHOLE number of refreshes.
+# The only rates available are 60, 30, 20, 15 - and every intermediate value we
+# have measured is a mix of one-vsync and two-vsync frames:
+#
+#   31.5 fps = 1.90 vsyncs/frame    34.0 = 1.76    43.2 = 1.39    54.0 = 1.11
+#
+# Every one of those sits between 16.7 and 33.3 ms of real frame time. So the
+# whole spread from 31 to 57 fps is ONE band, and a change that moved frame time
+# by several milliseconds inside it would not show up at all. Worse, whenever
+# the frame WAS fast enough we measured exactly 60.0 and learned nothing, since
+# that is the cap answering rather than the work.
+#
+# That is why draw distance 0.25 halved items and draws - measured, items ~1000
+# -> ~500, draws ~2000 -> ~1150 - and appeared to change nothing.
+#
+# Uncapped and vsync off, the frame rate becomes continuous and proportional to
+# the work, and one number finally separates the two candidate stories:
+#
+#   comfortably above 60 cold  -> the frame is affordable and the whole problem
+#                                 is heat; the answer is a 30 cap or less work
+#                                 per second, not less work per frame.
+#   near or below 60 cold      -> the frame is genuinely too expensive on this
+#                                 device even at full clock, and no cap saves it.
+#
+# KEEP IT SHORT - ninety seconds to two minutes, starting cold. Uncapped means
+# the GPU runs flat out and heats FASTER than normal play, and the reading is
+# only honest while scripts/gpu_cap.sh still says pwrlevel 0. This profile is
+# for measuring, not for playing.
+
+log_level=info
+skate3_native_render_scene_perf_log=true
+
+vsync=false
+skate3_guest_fps_cap=0
+skate3_guest_fps_cap_auto=false
+
+# Everything else at the shipping default, so this measures the stock frame.
+skate3_native_render_scene_scale=1.0
+skate3_draw_distance_scale=1.0

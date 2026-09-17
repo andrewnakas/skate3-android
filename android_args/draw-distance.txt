@@ -1,0 +1,46 @@
+# Thin the static world, because draw count is where the mass is.
+#
+# MEASURED 2026-09-16, on the fixed-0.60 run. Two separate problems stack:
+#
+#   min   fps  items  draw/f  render  items(cpu)
+#   1.6  60.0    405     782     3.4      2.4
+#   2.7  37.5    985    2009     5.8      5.0
+#   3.4  34.3    970    2048     6.8      5.9
+#   4.1  56.2    263     821     3.6      2.4     <- GPU still clamped here
+#
+# A dense area doubles draws per frame and doubles CPU render/items time with
+# them. The row at 4.1 min is the telling one: the GPU was STILL at thermal
+# power level 8, and the frame rate came back to 56 anyway as soon as the scene
+# lightened. So scene complexity is its own term, additive with the thermal cap
+# and not explained by it.
+#
+# Resolution is not the lever - 36% of the pixels bought about 16% less GPU
+# work, measured at matched frame rate and matched draw counts, so this frame
+# is not fill-bound. Draw count is the lever the cvar's own documentation
+# points at: the static world is ~750 of the ~765 items in a frame, which is
+# why its floor was lowered to 0.05.
+#
+# 0.25 is deliberately aggressive - a QUARTER of the console's own radius.
+# The point is to find out whether draw count moves the thermal cap at all; if
+# it does, 0.5 is the value to ship and this is only how we learned that.
+#
+# THE FIRST CHECK IS FREE AND NEEDS NO THERMAL RUN. draws-per-frame is in the
+# `native-scene: alive` heartbeat every ten seconds, so scripts/sustained.py
+# says within a minute whether the lever has any mass:
+#   draw/f in a dense area should fall well below the ~2000 measured above.
+# If it does not move, the setting is not reaching the draws and nothing about
+# thermals needs to be measured at all.
+#
+# skate3_lod_distance_scale is deliberately LEFT ALONE. It governs skaters,
+# pedestrians and vehicles, which the same comment puts at about a dozen items
+# of 765 - no mass, and moving it would only add a variable.
+
+log_level=info
+skate3_native_render_scene_perf_log=true
+
+skate3_draw_distance_scale=0.25
+
+# Full resolution and the 60 cap, so this measures ONE change against the runs
+# already on record.
+skate3_native_render_scene_scale=1.0
+skate3_guest_fps_cap=60

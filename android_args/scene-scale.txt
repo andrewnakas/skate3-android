@@ -1,0 +1,27 @@
+# Sub-native scene rendering: the fill-rate lever, for the thermal problem.
+#
+# WHY THIS FILE EXISTS. Measured 2026-09-16: the frame rate decay is the GPU's
+# thermal governor taking the clock away - thermal_pwrlevel reached 9 of 13 and
+# max_clock_mhz fell from 818 MHz to 317, with the GPU 94% busy the whole time.
+# Nothing accumulates in the process; the phone simply cannot sustain this frame
+# at full resolution. The only fix is to ask the GPU for less work.
+#
+# skate3_native_render_scene_scale renders the 3D scene at a fraction of the
+# output in each axis and upscales it with one bilinear pass. The HUD, the 2D
+# overlay and the menu backdrops still draw at full resolution, so text stays
+# sharp and only the shaded pixels get cheaper. 0.5 in each axis is a QUARTER
+# of the fill.
+#
+# Do NOT confuse it with native_render_output_scale, which shrinks the shared
+# guest output and must stay 1.0 - the emulated swap gamma pass is dispatched
+# by pixel index and writes out of bounds if that surface shrinks.
+#
+#   scripts/push_args.sh android_args/scene-scale.txt
+#   scripts/push_args.sh --clear     <- when the experiment is over
+
+log_level=info
+skate3_native_render_scene_perf_log=true
+
+# Start here. 0.60 is a little over a third of the fill; drop to 0.50 if the
+# GPU still reaches its thermal cap, raise toward 0.75 if it does not.
+skate3_native_render_scene_scale=0.60

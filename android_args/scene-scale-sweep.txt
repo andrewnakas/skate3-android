@@ -1,0 +1,28 @@
+# Arm the built-in scene-scale sweep: 1.00, 0.75, 0.60, 0.50, 0.40, each held
+# for 90 seconds of GAMEPLAY (menus and loads do not burn a step), the first
+# second of each discarded, reporting at WARN:
+#
+#   [scene-scale] 0.60  1152x630  frames=5400  gameplay=90.0s  fps=60.0
+#
+# READ THE RESULT WITH CARE - IT IS CONFOUNDED WITH THE THING WE ARE CHASING.
+# The steps run in a fixed order from largest to smallest, so step 1 is measured
+# on a cool phone and step 5 on a hot one, by which time the GPU's thermal
+# governor has taken the clock away (measured: 818 MHz -> 317 MHz over thirteen
+# minutes). Every later rung is therefore handicapped, and the sweep UNDERSTATES
+# how much a lower scale buys. It is useful for the shape of the curve and for
+# seeing the actual raster sizes; it is NOT the number to pick a scale from.
+#
+# To pick a scale, use android_args/scene-scale.txt with ONE fixed value and
+# play a full fifteen minutes. The question is not "what fps does this give in
+# ninety seconds" but "does the GPU still hit its thermal cap", which is read
+# directly off the phone:
+#
+#   adb shell 'cat /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel \
+#                  /sys/class/kgsl/kgsl-3d0/max_clock_mhz'
+#
+# pwrlevel 0 and 818 MHz after fifteen minutes is a pass. Anything else means
+# the scale is still too high for sustained play on this device.
+
+log_level=info
+skate3_native_render_scene_perf_log=true
+skate3_native_render_scene_scale_sweep_s=90

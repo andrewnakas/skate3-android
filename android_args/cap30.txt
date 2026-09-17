@@ -5,6 +5,35 @@
 #
 # Watch for the shape rather than the average: p50 holding steady while p95
 # climbs is memory pressure or throttling, not the renderer getting slower.
+#
+# --- 2026-09-16: this file stopped being a fallback and became a candidate ---
+#
+# The decay from 60 to ~30 over a session is the GPU's own thermal governor.
+# Measured on the S23 FE: thermal_pwrlevel reached 9 of 13 and max_clock_mhz
+# fell from 818 MHz to 317, with the GPU 88-95% busy throughout. Frame rate
+# tracked that ceiling the whole way down.
+#
+# Three levers were tried against it and none stopped the clamp:
+#   - scene scale 0.60 (36% of the pixels): still pwrlevel 9 in 3.5 minutes
+#   - draw distance 0.25: items ~1000 -> ~500 and draws ~2000 -> ~1150, and
+#     still pwrlevel 9 in 7 minutes
+#   - a light custom map (404-686 draws/frame): still pwrlevel 8 at 350 MHz
+#
+# So the GPU work has a large component that scales with neither resolution nor
+# scene content. A frame rate cap is the one lever that does not care what the
+# work IS: half the frames is half the GPU work per SECOND, which is what heats
+# the die.
+#
+# Two changes merged from the switch branch make a sub-60 cap usable where it
+# was not before. guest_time_scalar is no longer reset to 1.0 by Runtime::Setup,
+# and MatchGuestRefreshToFrameCap reports the guest display as 30 Hz to match -
+# this title advances ONE reported refresh period of simulation per rendered
+# frame, so without them a 30 fps cap runs the game at half speed rather than
+# steadily. That matching is on by default (skate3_match_guest_refresh_to_cap).
+#
+# The question this file asks is NOT what frame rate it gives - it gives 30. It
+# is whether the GPU stays OFF its thermal cap, read with scripts/gpu_cap.sh:
+# pwrlevel 0 and 818 MHz still holding after fifteen minutes is a pass.
 
 skate3_guest_fps_cap=30
 skate3_guest_fps_cap_auto=false
@@ -17,3 +46,7 @@ skate3_native_render_scene_mesh_store_mb=224
 texture_cache_memory_limit_soft=256
 texture_cache_memory_limit_hard=384
 gpu_wait_reg_mem_timeout_ms=20
+
+# The instruments, so the run can be read afterwards.
+log_level=info
+skate3_native_render_scene_perf_log=true
