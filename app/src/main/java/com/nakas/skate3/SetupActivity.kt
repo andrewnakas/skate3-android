@@ -47,73 +47,46 @@ class SetupActivity : Activity() {
         // Before refresh(), which clears the marker's meaning by reporting the
         // ordinary state.
         val killed = GameData.lastSessionWasKilled(this)
+        val end = if (killed) GameData.lastSessionEnd(this) else SessionEnd.NORMAL
         GameData.markSessionRunning(this, false)
         refresh()
-        if (killed) explainKilledSession()
+        // Only a real fault is worth a dialog. See explainCrashedSession.
+        if (end == SessionEnd.NATIVE_CRASH || end == SessionEnd.APP_CRASH) {
+            explainCrashedSession(end)
+        }
     }
 
     /**
-     * Says what happened when the last session did not end on purpose.
+     * Says so when the last session ended in a real fault, and stays quiet
+     * otherwise.
      *
-     * Android stops a backgrounded process this size without a word - no crash
-     * report, no fault, nothing in any log - and the player is simply looking
-     * at the launcher again. Reported as the game crashing when switching
-     * apps, which is accurate about what was seen and misleading about the
-     * cause, and there was no way for anyone to tell the difference.
+     * Every abnormal ending used to raise a dialog. That meant backgrounding
+     * the game - which on a process this size invites Android to reclaim it -
+     * greeted the player with "The game was closed by Android" the next time
+     * they opened the app, over and over, for something that is ordinary,
+     * unavoidable and already explained the first time. Being told is useful
+     * once; being told every launch is a nag, and it trains people to dismiss
+     * the box without reading it, which costs exactly the case that matters.
      *
-     * The first version of this said so, and then said it about EVERY
-     * abnormal exit, because a marker file cannot tell a memory kill from a
-     * native crash. So a genuine fault was met with "It is not a crash and
-     * there is nothing wrong with your install" - which sent the one person
-     * who could have reported it away reassured. #13 is that: filed as
-     * "Won\'t start" by someone whose phone was insisting nothing was wrong.
-     *
-     * Android knows which it was. Ask, and only claim it is not a crash when
-     * it actually is not.
+     * So only a genuine crash speaks up. Nothing is lost by the silence: the
+     * exit reason and Android's own detail go into "Copy the details"
+     * regardless, which is where a report is built from anyway - so a memory
+     * kill, an ANR or a force-stop is still fully diagnosable after the fact
+     * without interrupting anyone to say it happened.
      */
-    private fun explainKilledSession() {
-        val end = GameData.lastSessionEnd(this)
+    private fun explainCrashedSession(end: SessionEnd) {
         val detail = GameData.lastSessionEndDetail(this)
-        val title = when (end) {
-            SessionEnd.LOW_MEMORY -> "The game was closed by Android"
-            SessionEnd.NATIVE_CRASH, SessionEnd.APP_CRASH -> "The game crashed"
-            SessionEnd.NOT_RESPONDING -> "The game stopped responding"
-            SessionEnd.USER -> "The last session was closed"
-            else -> "The last session ended early"
-        }
-        val body = when (end) {
-            SessionEnd.LOW_MEMORY ->
-                "Android reclaims memory from apps in the background, and this one " +
-                    "needs about 3 GB, which makes it the first thing to go.\n\n" +
-                    "It is not a crash and there is nothing wrong with your install. " +
-                    "To make it less likely, close other apps before playing and " +
-                    "avoid leaving the game in the background for long."
-            SessionEnd.NATIVE_CRASH, SessionEnd.APP_CRASH ->
-                "This one is a real fault, not Android reclaiming memory - so it is " +
-                    "worth reporting rather than working around.\n\n" +
-                    "Use \"Copy the details\" below and open an issue with it. If it " +
-                    "happens every time you start the game, try selecting the System " +
-                    "GPU driver first: a custom driver that cannot run on this device " +
-                    "fails exactly like this."
-            SessionEnd.NOT_RESPONDING ->
-                "Android killed it for not responding. That usually means it was busy " +
-                    "far too long rather than stuck forever - loading on a slow device " +
-                    "can do it.\n\nIf it keeps happening, copy the details below and " +
-                    "open an issue."
-            SessionEnd.USER ->
-                "It was closed from the task switcher or from Settings, so this is " +
-                    "only here to say the game did not stop on its own."
-            else ->
-                "The last session did not end on its own, and Android did not record " +
-                    "why. The usual cause on a device this size is Android reclaiming " +
-                    "memory while the game was in the background; a fault in the game " +
-                    "would look the same from here.\n\nIf it keeps happening, copy the " +
-                    "details below and open an issue."
-        }
-        val progress = "\n\nYour career progress is saved by the game as you play."
+        val body =
+            "The last session ended in a fault rather than Android reclaiming memory, " +
+                "so it is worth reporting rather than working around.\n\n" +
+                "Use \"Copy the details\" below and open an issue with it. If it happens " +
+                "every time you start the game, try selecting the System GPU driver " +
+                "first: a custom driver that cannot run on this device fails exactly " +
+                "like this.\n\n" +
+                "Your career progress is saved by the game as you play."
         AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(body + progress + if (detail.isBlank()) "" else "\n\n$detail")
+            .setTitle(if (end == SessionEnd.NATIVE_CRASH) "The game crashed" else "The app crashed")
+            .setMessage(body + if (detail.isBlank()) "" else "\n\n$detail")
             .setPositiveButton("OK", null)
             .show()
     }
