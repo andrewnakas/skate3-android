@@ -158,6 +158,18 @@ object DriverStore {
             makeSonameUnique(File(staging, metadata.library))?.let { renamed ->
                 hashes.remove(metadata.library)
                 hashes[renamed] = sha256(File(staging, renamed))
+                // meta.json names the library too, and readInstalled checks the
+                // two against each other on every later load. Renaming the file
+                // without rewriting this left the package self-inconsistent and
+                // the import failed its own verification with "Driver metadata
+                // does not match its installed record."
+                val metaFile = File(staging, "meta.json")
+                val updated = readJson(metaFile, MAX_METADATA).put("libraryName", renamed)
+                FileOutputStream(metaFile).use { stream ->
+                    stream.write(updated.toString().toByteArray(Charsets.UTF_8))
+                    stream.fd.sync()
+                }
+                hashes["meta.json"] = sha256(metaFile)
                 library = renamed
             }
             val record = JSONObject().put("format", 1).put("id", id).put("archiveSha256", archiveHash)
