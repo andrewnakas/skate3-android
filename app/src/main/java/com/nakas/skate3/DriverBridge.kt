@@ -140,6 +140,18 @@ object DriverBridge {
         return null
     }
 
+    /**
+     * How to name this device's SoC in a message, on any supported Android.
+     *
+     * SOC_MANUFACTURER and SOC_MODEL are API 31, and minSdk here is 28.
+     * looksLikeAdreno can answer false below 31 - it reads Build.HARDWARE too -
+     * so the refusal message this feeds was reachable on a version where
+     * touching those fields throws. Lint caught it before a device did.
+     */
+    private fun socDescription(): String =
+        if (Build.VERSION.SDK_INT >= 31) "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}"
+        else Build.HARDWARE
+
     /** The warning a non-Adreno phone needs on an Adreno-only driver, if any. */
     private fun mismatchNote(): String? =
         if (looksLikeAdreno() == false) "Needs a Qualcomm Snapdragon GPU · will not work here" else null
@@ -315,8 +327,7 @@ object DriverBridge {
             // crashing on startup with no explanation attached.
             check(mode == SYSTEM || looksLikeAdreno() != false) {
                 "${label(context, mode)} is a driver for Qualcomm Snapdragon (Adreno) GPUs, " +
-                    "and this device has ${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}. " +
-                    "Select the System GPU driver."
+                    "and this device has ${socDescription()}. Select the System GPU driver."
             }
             val imported = if (mode != T30 && mode != SYSTEM) DriverStore.verify(context, mode) else null
             val driverDir = when (mode) {
