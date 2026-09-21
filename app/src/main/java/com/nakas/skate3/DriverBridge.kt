@@ -64,8 +64,13 @@ object DriverBridge {
         require(mode == SYSTEM || mode == T30 || DriverStore.find(context, mode) != null) {
             "That driver is unavailable. Import it again or select another driver."
         }
+        // Clearing the last attempt is what makes a retry possible: disarming
+        // leaves a pending record naming this driver, and without dropping it
+        // an explicit re-selection would be switched straight back off again.
         check(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString("selected", mode).commit()) { "Could not save the GPU driver selection." }
+            .putString("selected", mode).remove("last_result").commit()) {
+            "Could not save the GPU driver selection."
+        }
     }
 
     fun label(context: Context, mode: String): String = when (mode) {
@@ -74,12 +79,59 @@ object DriverBridge {
         else -> DriverStore.find(context, mode)?.label ?: "Unavailable imported driver"
     }
 
+    /**
+     * Whether this phone has the GPU custom drivers are built for.
+     *
+     * Turnip is Mesa's driver for Adreno, and every driver anyone imports here
+     * is an Adreno driver - there is no Mali equivalent to import. On a
+     * MediaTek or Exynos phone the option is therefore offered and cannot
+     * possibly work, and it failed the worst way available: the load took the
+     * process down, which read to the player as the game crashing.
+     *
+     * Reported on the SoC name rather than the Vulkan device, because this has
+     * to be answerable before any driver is loaded. SOC_MANUFACTURER is API 31
+     * and up; below that the honest answer is "no idea", and the option stays
+     * unmarked rather than being wrongly flagged.
+     */
+    private fun looksLikeAdreno(): Boolean? {
+        val soc = buildString {
+            if (Build.VERSION.SDK_INT >= 31) {
+                append(Build.SOC_MANUFACTURER).append(' ').append(Build.SOC_MODEL).append(' ')
+            }
+            append(Build.HARDWARE)
+        }.lowercase(java.util.Locale.ROOT)
+
+        // Qualcomm, positively. "QTI" is Qualcomm Technologies, Inc, and it is
+        // what a Galaxy S23 FE actually reports - SOC_MANUFACTURER is "QTI",
+        // never the word "Qualcomm". Matching only on "qualcomm" refused every
+        // custom driver on a real Adreno 730. "qcom" is the HARDWARE name
+        // Snapdragons have carried for a decade and covers the rest.
+        if (soc.contains("qualcomm") || soc.contains("qti") ||
+            soc.contains("snapdragon") || soc.contains("qcom")) {
+            return true
+        }
+
+        // Only these are known not to be Adreno. Everything else is UNKNOWN,
+        // and unknown must never refuse: wrongly blocking a driver on a device
+        // that could have run it is the worse mistake, now that a load which
+        // kills the process is recovered from instead of repeated forever.
+        val notAdreno = listOf("mediatek", "mt6", "mt8", "exynos", "tensor",
+                               "unisoc", "spreadtrum", "kirin", "hisilicon")
+        if (notAdreno.any { soc.contains(it) }) return false
+        return null
+    }
+
+    /** The warning a non-Adreno phone needs on an Adreno-only driver, if any. */
+    private fun mismatchNote(): String? =
+        if (looksLikeAdreno() == false) "Needs a Qualcomm Snapdragon GPU · will not work here" else null
+
     fun choices(context: Context): List<DriverOption> = buildList {
+        val mismatch = mismatchNote()
         add(DriverOption(SYSTEM, "System GPU driver", "Built into your device · default", false))
-        add(DriverOption(T30, "Turnip T30", "Bundled · MrPurple · Mesa", false))
+        add(DriverOption(T30, "Turnip T30", mismatch ?: "Bundled · MrPurple · Mesa", false))
         DriverStore.list(context).forEach {
             add(DriverOption(it.id, it.label,
-                listOf(it.author, "Imported").filter(String::isNotBlank).joinToString(" · "), true))
+                mismatch ?: listOf(it.author, "Imported").filter(String::isNotBlank).joinToString(" · "), true))
         }
         val unavailable = DriverStore.invalidIds(context).toMutableSet()
         val selected = selected(context)
@@ -168,8 +220,64 @@ object DriverBridge {
         }
     }
 
+    /**
+     * Turns off a driver that killed the process last time it was loaded.
+     *
+     * A native driver can take the process down inside its own loader, before
+     * it can return an error - which is exactly how an Adreno driver built for
+     * another device, or for another Android version, fails. The attempt
+     * record written just before the load was meant to catch that: the comment
+     * on it promised the next launcher would explain the incomplete check
+     * "without automatically loading it".
+     *
+     * Nothing ever read it. "pending" was written and never looked at again,
+     * so the next launch selected the same driver and died the same way, for
+     * as long as the player kept trying. Reported as custom drivers crashing
+     * the game, with no way back except guessing that the driver screen was
+     * the place to go.
+     *
+     * The pid is what makes this safe. A record from THIS process is the one
+     * we just wrote, or the setup screen's own probe, and means nothing; only
+     * a pending record left behind by a process that is gone is evidence that
+     * the load never returned. The selection is reverted rather than merely
+     * skipped, so the driver screen shows what is actually in use and the
+     * player can deliberately choose it again - select() clears the record,
+     * which is what makes a retry possible at all.
+     */
+    private fun disarmAbandoned(context: Context, mode: String): Boolean {
+        if (mode == SYSTEM) return false
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val raw = prefs.getString("last_result", null) ?: return false
+        val record = runCatching { JSONObject(raw) }.getOrNull() ?: return false
+        if (record.optString("selection") != mode) return false
+        val native = record.optJSONObject("native") ?: return false
+        if (!native.optBoolean("pending", false)) return false
+        if (record.optInt("pid", -1) == Process.myPid()) return false
+
+        val label = label(context, mode)
+        prefs.edit()
+            .putString("selected", SYSTEM)
+            .putString("last_result", JSONObject()
+                .put("selection", mode)
+                .put("pid", Process.myPid())
+                .put("label", label)
+                .put("time_ms", System.currentTimeMillis())
+                .put("native", JSONObject().put("ok", false).put("disarmed", true).put(
+                    "error",
+                    "$label closed the app while it was loading, so the System GPU driver " +
+                        "is in use instead. Select it again from the driver screen to retry."))
+                .toString())
+            .commit()
+        Log.w("Skate3Driver", "Disarmed $mode: a previous process died while loading it")
+        return true
+    }
+
     /** Called before SDL loads libmain, or explicitly from the setup probe. */
     @Synchronized fun initialize(context: Context): JSONObject {
+        // Before anything reads the selection for real: a driver that took the
+        // process down last time is switched off here, and `mode` below is
+        // then the fallback rather than the one that crashed.
+        if (initializedMode == null) disarmAbandoned(context, selected(context))
         val mode = selected(context)
         initializedMode?.let {
             check(it == mode) { "The GPU driver changed. Restart the app before starting the game." }
@@ -182,6 +290,15 @@ object DriverBridge {
             }
             check(mode != T30 || Build.VERSION.SDK_INT >= 30) {
                 "Turnip T30 needs Android 11 or newer. Select System to use this Android version."
+            }
+            // Refused here, before the native loader sees it. Letting an
+            // Adreno driver load on a Mali device does not fail politely - it
+            // takes the process down, which the player reads as the game
+            // crashing on startup with no explanation attached.
+            check(mode == SYSTEM || looksLikeAdreno() != false) {
+                "${label(context, mode)} is a driver for Qualcomm Snapdragon (Adreno) GPUs, " +
+                    "and this device has ${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}. " +
+                    "Select the System GPU driver."
             }
             val imported = if (mode != T30 && mode != SYSTEM) DriverStore.verify(context, mode) else null
             val driverDir = when (mode) {
