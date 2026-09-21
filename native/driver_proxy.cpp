@@ -31,6 +31,9 @@ std::atomic<bool> g_ready{false};
 std::atomic<uint32_t> g_game_instances{0};
 bool g_attempted = false;
 bool g_custom = false;
+// Identity of physical device 0 under the stock driver, read before a custom
+// one is loaded. Empty when it could not be read.
+std::string g_system_identity;
 void* g_loader = nullptr; // Deliberately retained until process exit.
 PFN_vkGetInstanceProcAddr g_get = nullptr;
 PFN_vkDestroyInstance g_destroy = nullptr;
@@ -100,6 +103,87 @@ Fn Get(VkInstance instance, const char* name) {
   return reinterpret_cast<Fn>(g_get(instance, name));
 }
 
+// What makes one driver distinguishable from another.
+//
+// Not the GPU name alone - that is the same physical chip either way - and not
+// apiVersion, which two builds of the same driver family often share.
+// driverVersion, driverName and driverInfo are what actually move between a
+// stock driver and one taken from somewhere else.
+std::string DeviceIdentity(const VkPhysicalDeviceProperties& basic,
+                           const VkPhysicalDeviceDriverProperties& driver) {
+  return std::to_string(driver.driverID) + "|" + std::to_string(basic.driverVersion) + "|" +
+         std::string(driver.driverName) + "|" + std::string(driver.driverInfo) + "|" +
+         std::string(basic.deviceName);
+}
+
+// Reads the stock driver's identity, using its own handle and nothing global.
+//
+// This is what makes supporting a non-Turnip driver possible at all.
+// libadrenotools is documented to return a valid pointer and then quietly fall
+// back to the original driver when its hook does not take, so something has to
+// prove the swap really happened. For Turnip the driver ID alone proves it -
+// the stock Adreno driver can never report Mesa. A custom QUALCOMM driver
+// reports exactly what the stock one reports, so the ID proves nothing, and
+// the only honest evidence is that the identity CHANGED.
+bool ProbeSystemIdentity(std::string& identity) {
+  void* handle = dlopen("/system/lib64/libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+  if (!handle) return false;
+  const auto get = reinterpret_cast<PFN_vkGetInstanceProcAddr>(
+      dlsym(handle, "vkGetInstanceProcAddr"));
+  if (!get) { dlclose(handle); return false; }
+  const auto create = reinterpret_cast<PFN_vkCreateInstance>(get(VK_NULL_HANDLE, "vkCreateInstance"));
+  const auto enumerate_version = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
+      get(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
+  if (!create) { dlclose(handle); return false; }
+  uint32_t api = VK_API_VERSION_1_0;
+  if (enumerate_version && enumerate_version(&api) != VK_SUCCESS) api = VK_API_VERSION_1_0;
+  api = std::min(api, static_cast<uint32_t>(VK_API_VERSION_1_2));
+
+  VkApplicationInfo app{};
+  app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+  app.pApplicationName = "Skate3 System Driver Probe";
+  app.apiVersion = api;
+  VkInstanceCreateInfo info{};
+  info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+  info.pApplicationInfo = &app;
+  VkInstance instance = VK_NULL_HANDLE;
+  if (create(&info, nullptr, &instance) != VK_SUCCESS || instance == VK_NULL_HANDLE) {
+    dlclose(handle);
+    return false;
+  }
+
+  bool found = false;
+  const auto enumerate = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(
+      get(instance, "vkEnumeratePhysicalDevices"));
+  const auto properties = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(
+      get(instance, "vkGetPhysicalDeviceProperties"));
+  const auto properties2 = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(
+      get(instance, "vkGetPhysicalDeviceProperties2"));
+  uint32_t count = 0;
+  if (enumerate && properties && enumerate(instance, &count, nullptr) == VK_SUCCESS &&
+      count > 0 && count <= kMaxPhysicalDevices) {
+    std::vector<VkPhysicalDevice> devices(count);
+    if (enumerate(instance, &count, devices.data()) == VK_SUCCESS && count > 0) {
+      VkPhysicalDeviceProperties basic{};
+      properties(devices[0], &basic);
+      VkPhysicalDeviceDriverProperties driver{};
+      driver.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+      if (api >= VK_API_VERSION_1_2 && basic.apiVersion >= VK_API_VERSION_1_2 && properties2) {
+        VkPhysicalDeviceProperties2 extended{};
+        extended.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        extended.pNext = &driver;
+        properties2(devices[0], &extended);
+      }
+      identity = DeviceIdentity(basic, driver);
+      found = true;
+    }
+  }
+  const auto destroy = reinterpret_cast<PFN_vkDestroyInstance>(get(instance, "vkDestroyInstance"));
+  if (destroy) destroy(instance, nullptr);
+  dlclose(handle);
+  return found;
+}
+
 // Uses only functions from the selected loader, never this proxy's exports.
 // A custom selection requires Vulkan 1.2 driver identity support. RP6/T30
 // supports this; failing explicitly is safer than guessing from a GPU name.
@@ -141,10 +225,38 @@ bool VerifyInstance(VkInstance instance, uint32_t requested_api,
       extended.pNext = &driver;
       properties2(devices[i], &extended);
     }
-    if (g_custom && driver.driverID != VK_DRIVER_ID_MESA_TURNIP) {
-      error = "Turnip was selected but the loaded physical device does not report Mesa Turnip (driverID=" +
-              std::to_string(driver.driverID) + ", GPU=" + std::string(basic.deviceName) + ")";
-      return false;
+    // Did the swap actually happen? Two ways to know, and the cheap one first:
+    // a driver that is not Qualcomm's own cannot be the stock Adreno driver,
+    // which settles every Turnip case without needing a baseline at all.
+    //
+    // Otherwise fall back to comparing identities. This used to demand Mesa
+    // Turnip outright, which made a proprietary Qualcomm driver - the kind
+    // extracted from another device - impossible to use however good it was,
+    // because it reports the same driverID as the driver it replaces. An
+    // identity that has not moved is the real evidence of libadrenotools
+    // having fallen back, and that is what is reported now.
+    // Every custom driver is checked the same way, with no shortcut on driver
+    // ID. A shortcut was tried - trust anything not reporting as Qualcomm -
+    // and it passed a silent fallback as success on the very first device it
+    // met: this phone's stock driver reports Vulkan 1.1, so the 1.2 driver
+    // properties are never filled in and driverID reads 0 rather than
+    // QUALCOMM_PROPRIETARY. The old Turnip-only test happened to catch that
+    // (0 is not Mesa either); an ID-based test that is trying to ACCEPT
+    // drivers cannot. The identity comparison does not care, because a
+    // fallback produces the stock identity whatever the ID says.
+    if (g_custom) {
+      const std::string identity = DeviceIdentity(basic, driver);
+      if (g_system_identity.empty()) {
+        error = "A custom driver was selected, but this device's own driver could not be read "
+                "first, so there is no way to tell whether the custom one actually loaded";
+        return false;
+      }
+      if (identity == g_system_identity) {
+        error = "The custom driver did not take effect - the loaded driver is identical to this "
+                "device's own (" + std::string(basic.deviceName) + ", driverVersion " +
+                std::to_string(basic.driverVersion) + ")";
+        return false;
+      }
     }
     if (i) devices_json += ",";
     devices_json += "{\"name\":" + Quote(basic.deviceName) +
@@ -242,6 +354,15 @@ EXPORT jstring JNICALL Java_com_nakas_skate3_DriverBridge_nativeInit(
     } else if (!RegularFile(native_dir + "libhook_impl.so") || !RegularFile(native_dir + "libmain_hook.so")) {
       error = "Custom driver support libraries are missing; native libraries must be extracted";
     } else {
+      // Read the stock driver BEFORE the hook is installed - afterwards there
+      // is no longer an unhooked loader to ask. Not fatal on its own: a Turnip
+      // driver is recognised by its driver ID and needs no baseline, so only a
+      // same-vendor driver is refused for the lack of one.
+      if (!ProbeSystemIdentity(g_system_identity)) {
+        g_system_identity.clear();
+        __android_log_print(ANDROID_LOG_WARN, kTag,
+                            "could not read this device's own driver identity before loading the custom one");
+      }
       g_loader = adrenotools_open_libvulkan(RTLD_NOW | RTLD_LOCAL, ADRENOTOOLS_DRIVER_CUSTOM,
           driver_dir.c_str(), native_dir.c_str(), driver_dir.c_str(), filename.c_str(), nullptr, nullptr);
       if (!g_loader) error = "libadrenotools could not initialize the selected custom driver";
