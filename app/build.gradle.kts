@@ -37,8 +37,8 @@ android {
         // (27) for the audio backend, both of which the runtime needs.
         minSdk = 28
         targetSdk = 35
-        versionCode = 25
-        versionName = "0.1.24"
+        versionCode = 26
+        versionName = "0.1.25"
         ndk { abiFilters += "arm64-v8a" }
     }
 
