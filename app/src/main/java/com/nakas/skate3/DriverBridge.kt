@@ -363,7 +363,16 @@ object DriverBridge {
             // Not a silent substitution: the note is what the launcher shows,
             // and the selection is only given up after the driver has actually
             // failed to come up.
-            if (mode != SYSTEM) {
+            //
+            // nativeRecord is what says the driver itself was reached and
+            // rejected. Everything that fails before that - the proxy missing,
+            // the Vulkan lookup not resolving to it, a GPU that cannot take a
+            // custom driver at all - is the environment failing, not the
+            // driver, and dropping the player's choice over it would be the
+            // silent substitution this is careful not to be. The regression
+            // suite pins that distinction: an isolated harness with no proxy to
+            // load must come back with the selection it went in with.
+            if (mode != SYSTEM && nativeRecord != null) {
                 context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                     .putString("selected", SYSTEM)
                     .putString("disarmed_note",

@@ -43,6 +43,8 @@ object DriverStore {
     private const val MAX_METADATA = 64 * 1024
     private const val MAX_MANIFEST = 128 * 1024
     private const val MANIFEST = ".driver-store.json"
+    /** The soname Android's own Adreno driver already occupies in every process. */
+    private const val SYSTEM_DRIVER_SONAME = "vulkan.adreno.so"
     private val hashPattern = Regex("[0-9a-f]{64}")
     private val libraryPattern = Regex("[A-Za-z0-9][A-Za-z0-9._+\\-]*\\.so(?:\\.[A-Za-z0-9._+\\-]+)?")
     private val temporaryPattern = Regex("\\.(?:staging|archive)-[0-9a-f-]{36}(?:\\.zip)?")
@@ -149,9 +151,18 @@ object DriverStore {
                     validateElf(file)
                 }
             }
+            // Give the driver a soname nothing else in the process answers to.
+            // See makeSonameUnique - without this a proprietary Qualcomm driver
+            // is loaded in name only.
+            var library = metadata.library
+            makeSonameUnique(File(staging, metadata.library))?.let { renamed ->
+                hashes.remove(metadata.library)
+                hashes[renamed] = sha256(File(staging, renamed))
+                library = renamed
+            }
             val record = JSONObject().put("format", 1).put("id", id).put("archiveSha256", archiveHash)
                 .put("name", metadata.name).put("version", metadata.version).put("author", metadata.author)
-                .put("minApi", metadata.minApi).put("libraryName", metadata.library)
+                .put("minApi", metadata.minApi).put("libraryName", library)
                 .put("files", JSONObject(hashes as Map<*, *>))
             FileOutputStream(File(staging, MANIFEST)).use { stream ->
                 stream.write(record.toString().toByteArray(Charsets.UTF_8))
@@ -181,6 +192,131 @@ object DriverStore {
             archive?.let { runCatching { deleteOwned(it) } }
             staging?.let { runCatching { deleteOwned(it) } }
         }
+    }
+
+    /**
+     * Renames a driver so the dynamic linker cannot mistake it for the one the
+     * system has already loaded, patching its ELF soname to match.
+     *
+     * THIS IS WHAT MAKES A PROPRIETARY DRIVER WORK AT ALL. A Qualcomm driver
+     * extracted from another device carries the soname `vulkan.adreno.so` -
+     * exactly the name of the driver Android has already loaded into this
+     * process for its own UI. android_dlopen_ext then finds that soname
+     * already present in the namespace ancestry and hands back the EXISTING
+     * handle instead of reading our file. Everything reports success: the hook
+     * fires, a valid handle comes back, nothing is logged as an error - and
+     * the driver in use is still the stock one, which is why such a driver
+     * looked like it loaded and then behaved exactly like no driver at all.
+     * libadrenotools documents the same dead end and leaves it as a TODO.
+     *
+     * Turnip never hit this, because its soname is its own
+     * (`vulkan.ad07xx.so`, `libvulkan_freedreno.so`) - which is the whole
+     * reason Turnip was the only kind of driver that had ever worked here.
+     *
+     * The replacement keeps the original length so it can be written back in
+     * place: the file stays byte-for-byte identical apart from those sixteen,
+     * and nothing anywhere references a driver by soname. Returns the new file
+     * name, or null when the soname is already distinct and the file is left
+     * alone.
+     */
+    private fun makeSonameUnique(library: File): String? {
+        val data = try {
+            library.readBytes()
+        } catch (_: Exception) {
+            return null
+        }
+        val offset = sonameOffset(data) ?: return null
+        var end = offset
+        while (end < data.size && data[end].toInt() != 0) end++
+        if (end <= offset || end >= data.size) return null
+        val soname = String(data, offset, end - offset, Charsets.US_ASCII)
+        // Only the colliding name is worth touching. A driver with a soname of
+        // its own already loads correctly, and rewriting it would be risk for
+        // no gain.
+        if (soname != SYSTEM_DRIVER_SONAME) return null
+        // Same length, so it drops straight into the string table. The zero
+        // here is the digit, not the letter.
+        val unique = "vulkan.adren0.so"
+        if (unique.length != soname.length) return null
+        unique.forEachIndexed { i, c -> data[offset + i] = c.code.toByte() }
+        val renamed = File(library.parentFile, unique)
+        if (existsNoFollow(renamed)) return null
+        FileOutputStream(renamed).use { stream ->
+            stream.write(data)
+            stream.fd.sync()
+        }
+        deleteOwned(library)
+        // The original has to be gone, not merely asked to leave: leaving both
+        // names in place would keep the colliding soname one dlopen away, and
+        // verifyDirectory would reject the extra file anyway.
+        if (existsNoFollow(library)) {
+            runCatching { deleteOwned(renamed) }
+            return null
+        }
+        return unique
+    }
+
+    private fun sha256(file: File): String {
+        val hash = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { stream ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = stream.read(buffer)
+                if (read <= 0) break
+                hash.update(buffer, 0, read)
+            }
+        }
+        return hash.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
+    }
+
+    /** File offset of the DT_SONAME string, or null if this is not an ELF64 shared object. */
+    private fun sonameOffset(data: ByteArray): Int? {
+        if (data.size < 0x40) return null
+        if (data[0] != 0x7F.toByte() || data[1] != 'E'.code.toByte() ||
+            data[2] != 'L'.code.toByte() || data[3] != 'F'.code.toByte()) return null
+        if (data[4].toInt() != 2 || data[5].toInt() != 1) return null  // ELF64, little-endian
+        val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+        val programHeaders = buffer.getLong(0x20)
+        val entrySize = buffer.getShort(0x36).toInt() and 0xFFFF
+        val entryCount = buffer.getShort(0x38).toInt() and 0xFFFF
+        if (programHeaders <= 0 || entrySize < 56 || entryCount == 0) return null
+
+        // The dynamic section holds virtual addresses; the loadable segments
+        // are the only way back to a file offset.
+        val loads = mutableListOf<Triple<Long, Long, Long>>()
+        var dynamicOffset = -1L
+        var dynamicSize = 0L
+        for (i in 0 until entryCount) {
+            val at = programHeaders + i.toLong() * entrySize
+            if (at < 0 || at + entrySize > data.size) return null
+            val type = buffer.getInt(at.toInt())
+            val fileOffset = buffer.getLong(at.toInt() + 0x08)
+            val virtualAddress = buffer.getLong(at.toInt() + 0x10)
+            val fileSize = buffer.getLong(at.toInt() + 0x20)
+            when (type) {
+                1 -> loads.add(Triple(virtualAddress, fileOffset, fileSize))
+                2 -> { dynamicOffset = fileOffset; dynamicSize = fileSize }
+            }
+        }
+        if (dynamicOffset < 0 || dynamicSize <= 0) return null
+
+        var stringTable = -1L
+        var soname = -1L
+        var at = dynamicOffset
+        while (at + 16 <= dynamicOffset + dynamicSize && at + 16 <= data.size) {
+            val tag = buffer.getLong(at.toInt())
+            val value = buffer.getLong(at.toInt() + 8)
+            if (tag == 0L) break
+            if (tag == 5L) stringTable = value
+            if (tag == 14L) soname = value
+            at += 16
+        }
+        if (stringTable < 0 || soname < 0) return null
+        val base = loads.firstOrNull { stringTable >= it.first && stringTable < it.first + it.third }
+            ?.let { it.second + (stringTable - it.first) } ?: return null
+        val absolute = base + soname
+        if (absolute <= 0 || absolute >= data.size) return null
+        return absolute.toInt()
     }
 
     private fun idHash(id: String): String {
