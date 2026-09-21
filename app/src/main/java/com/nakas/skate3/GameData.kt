@@ -1,6 +1,9 @@
 package com.nakas.skate3
 
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.Context
+import android.os.Build
 import android.os.StatFs
 import java.io.File
 
@@ -13,6 +16,38 @@ import java.io.File
  * removed when the app is uninstalled. The native side derives the same paths
  * from SDL, so the two agree without either being told.
  */
+/**
+ * What ended the last game session.
+ *
+ * Kept separate from "the session did not end cleanly", which is all the
+ * marker file can tell anyone. The distinction matters because the advice is
+ * opposite: a memory kill is ordinary and the player should close other apps,
+ * while a native crash is a bug and should be reported rather than explained
+ * away.
+ */
+enum class SessionEnd {
+    /** Left under its own power. */
+    NORMAL,
+
+    /** Android reclaimed the memory - the case the old message assumed. */
+    LOW_MEMORY,
+
+    /** A fault in native code. A real bug, and worth a report. */
+    NATIVE_CRASH,
+
+    /** An unhandled exception on the Kotlin side. */
+    APP_CRASH,
+
+    /** Stopped responding and was killed for it. */
+    NOT_RESPONDING,
+
+    /** Swiped away, or force-stopped from Settings. */
+    USER,
+
+    /** Ended abnormally and Android did not say how, or is too old to know. */
+    UNKNOWN,
+}
+
 object GameData {
 
     /** The disc dump takes about 6 GB; refuse to start an install without room. */
@@ -135,6 +170,80 @@ object GameData {
         sessionMarker(context).isFile
     } catch (_: Exception) {
         false
+    }
+
+    /**
+     * Why the last session ended, as Android itself reports it.
+     *
+     * The marker above can only say the game did not leave under its own
+     * power, and that is equally true of an out-of-memory kill, a native
+     * crash, an ANR and a force-stop. The launcher told all four of them "It
+     * is not a crash and there is nothing wrong with your install", which is
+     * the opposite of the truth for a crash and hid the fault from the only
+     * person able to report it. #13 was filed as "Won't start" by someone
+     * whose phone was being told nothing was wrong.
+     *
+     * Android has kept the real answer since API 30 and hands it over for the
+     * asking. Below that the honest answer is UNKNOWN - the marker still says
+     * the session ended abnormally, just not why.
+     *
+     * Only the main process is considered: RestartActivity runs in :restart
+     * and exits on purpose every time it is used, so its record would
+     * otherwise be the most recent one and answer a question nobody asked.
+     */
+    fun lastSessionEnd(context: Context): SessionEnd {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return SessionEnd.UNKNOWN
+        }
+        return try {
+            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+                ?: return SessionEnd.UNKNOWN
+            // Most recent first. A handful, not one: the main process is not
+            // guaranteed to be the newest record.
+            val records = manager.getHistoricalProcessExitReasons(context.packageName, 0, 16)
+            val exit = records.firstOrNull { it.processName == context.packageName }
+                ?: return SessionEnd.UNKNOWN
+            when (exit.reason) {
+                ApplicationExitInfo.REASON_LOW_MEMORY -> SessionEnd.LOW_MEMORY
+                ApplicationExitInfo.REASON_CRASH_NATIVE -> SessionEnd.NATIVE_CRASH
+                ApplicationExitInfo.REASON_CRASH -> SessionEnd.APP_CRASH
+                ApplicationExitInfo.REASON_ANR -> SessionEnd.NOT_RESPONDING
+                ApplicationExitInfo.REASON_USER_REQUESTED,
+                ApplicationExitInfo.REASON_USER_STOPPED -> SessionEnd.USER
+                ApplicationExitInfo.REASON_EXIT_SELF -> SessionEnd.NORMAL
+                // SIGNALED covers both a debugger detaching and the low-memory
+                // killer on some builds, so it is not evidence of either.
+                else -> SessionEnd.UNKNOWN
+            }
+        } catch (_: Exception) {
+            SessionEnd.UNKNOWN
+        }
+    }
+
+    /**
+     * A one-line technical description of the last exit, for the report the
+     * player copies into an issue. Empty when Android has nothing to say.
+     */
+    fun lastSessionEndDetail(context: Context): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return ""
+        }
+        return try {
+            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+                ?: return ""
+            val exit = manager.getHistoricalProcessExitReasons(context.packageName, 0, 16)
+                .firstOrNull { it.processName == context.packageName } ?: return ""
+            buildString {
+                append("reason=").append(exit.reason)
+                append(" status=").append(exit.status)
+                append(" importance=").append(exit.importance)
+                append(" pss=").append(exit.pss).append("kB")
+                append(" rss=").append(exit.rss).append("kB")
+                exit.description?.takeIf { it.isNotBlank() }?.let { append(" \"").append(it).append('"') }
+            }
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     fun describeFree(context: Context): String {
