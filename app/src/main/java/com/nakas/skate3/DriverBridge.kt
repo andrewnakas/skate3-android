@@ -68,7 +68,7 @@ object DriverBridge {
         // leaves a pending record naming this driver, and without dropping it
         // an explicit re-selection would be switched straight back off again.
         check(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString("selected", mode).remove("last_result").commit()) {
+            .putString("selected", mode).remove("last_result").remove("disarmed_note").commit()) {
             "Could not save the GPU driver selection."
         }
     }
@@ -255,18 +255,17 @@ object DriverBridge {
         if (record.optInt("pid", -1) == Process.myPid()) return false
 
         val label = label(context, mode)
+        // The note is its own key on purpose. Writing it into last_result did
+        // not survive: initialize() carries straight on to load System and
+        // overwrites that record, so the status line said "System verified"
+        // and never mentioned that the player's choice had been overridden or
+        // why - swapping one unexplained behaviour for another. This outlives
+        // the successful load and is cleared only by an explicit selection.
         prefs.edit()
             .putString("selected", SYSTEM)
-            .putString("last_result", JSONObject()
-                .put("selection", mode)
-                .put("pid", Process.myPid())
-                .put("label", label)
-                .put("time_ms", System.currentTimeMillis())
-                .put("native", JSONObject().put("ok", false).put("disarmed", true).put(
-                    "error",
-                    "$label closed the app while it was loading, so the System GPU driver " +
-                        "is in use instead. Select it again from the driver screen to retry."))
-                .toString())
+            .putString("disarmed_note",
+                "$label closed the app while it was loading, so the System GPU driver is in " +
+                    "use instead. Select it again from the driver screen to retry.")
             .commit()
         Log.w("Skate3Driver", "Disarmed $mode: a previous process died while loading it")
         return true
@@ -363,7 +362,10 @@ object DriverBridge {
             }
             else "Last check: $checked failed — ${native.optString("error")}."
         }.getOrDefault("No driver check is available.")
-        return "Selected GPU driver: ${label(context, mode)}\n$detail"
+        val disarmed = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("disarmed_note", null)
+        return "Selected GPU driver: ${label(context, mode)}\n" +
+            (if (disarmed.isNullOrBlank()) "" else "$disarmed\n") + detail
     }
 
     fun diagnostic(context: Context): String = status(context) + "\n" +
