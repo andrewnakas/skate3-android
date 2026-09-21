@@ -73,6 +73,25 @@ object DriverBridge {
         }
     }
 
+    /**
+     * Turns a driver failure into something a player can act on.
+     *
+     * The native check reports the raw Vulkan facts - "does not report Mesa
+     * Turnip (driverID=8...)" - which is exactly right in a log and means
+     * nothing on a phone screen. driverID 8 is Qualcomm's own proprietary
+     * driver, and the proxy only accepts Mesa Turnip, so importing a driver
+     * extracted from another device can never work here however well built it
+     * is. Saying so is the difference between a dead end and a fixable
+     * mistake.
+     */
+    private fun explain(message: String): String = when {
+        message.contains("does not report Mesa Turnip") ->
+            "It is a proprietary Qualcomm driver, and only Mesa Turnip drivers can be used here."
+        message.contains("Vulkan 1.2") ->
+            "This device's Vulkan support is too old for a custom driver."
+        else -> message
+    }
+
     fun label(context: Context, mode: String): String = when (mode) {
         T30 -> "Turnip T30"
         SYSTEM -> "System"
@@ -334,7 +353,39 @@ object DriverBridge {
         } catch (error: Throwable) {
             val message = error.message ?: error.javaClass.simpleName
             record(context, mode, (nativeRecord ?: JSONObject()).put("ok", false).put("error", message))
-            throw IllegalStateException("${label(context, mode)} failed: $message\nSelect another driver and apply it to restart.", error)
+            // Put the selection back so the next launch is not the same dead
+            // end. Without this the game could not be started at all until the
+            // player found the driver screen on their own - and the only thing
+            // on screen was SDL's generic "try again and/or reinstall", which
+            // is advice that cannot help: reinstalling the app keeps the
+            // selection, and the driver is what needs changing.
+            //
+            // Not a silent substitution: the note is what the launcher shows,
+            // and the selection is only given up after the driver has actually
+            // failed to come up.
+            if (mode != SYSTEM) {
+                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                    .putString("selected", SYSTEM)
+                    .putString("disarmed_note",
+                        "${label(context, mode)} could not be used, so the System GPU driver is " +
+                            "in use instead. ${explain(message)}")
+                    .commit()
+                // Cleared with the selection. This records which driver was
+                // tried so a second call in the same process can refuse a
+                // changed selection - but the selection just changed HERE, on
+                // purpose, and leaving it set made the retry fail with "The
+                // GPU driver changed. Restart the app before starting the
+                // game." on top of a message about System failing to load,
+                // neither of which had happened.
+                attemptedMode = null
+                Log.w("Skate3Driver", "Reverted to System after $mode failed: $message")
+                throw IllegalStateException(
+                    "${label(context, mode)} could not be used, so the System GPU driver is now " +
+                        "selected. ${explain(message)} Start the game again.", error)
+            }
+            throw IllegalStateException(
+                "${label(context, mode)} failed: ${explain(message)}\n" +
+                    "Select another driver and apply it to restart.", error)
         }
     }
 
