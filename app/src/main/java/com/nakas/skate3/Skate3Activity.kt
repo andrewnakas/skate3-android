@@ -86,6 +86,12 @@ class Skate3Activity : SDLActivity() {
             }
         }
         selectSixtyHertzDisplayMode()
+
+        // Hold the process out of the cached-app bucket for as long as this
+        // session lives. Backgrounding an app this large is otherwise a coin
+        // flip: the system reclaims it and the player comes back to the
+        // launcher instead of to their run. See GameKeepAliveService.
+        GameKeepAliveService.start(this)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -115,6 +121,8 @@ class Skate3Activity : SDLActivity() {
 
     override fun onDestroy() {
         GameData.markSessionRunning(this, false)
+        // Release the notification with the session it was holding open.
+        GameKeepAliveService.stop(this)
         super.onDestroy()
     }
 
