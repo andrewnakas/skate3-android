@@ -138,9 +138,13 @@ early Skate 3 bring-up on ReXGlue in
 **Skate 3 on ARM64.** **Buku313**
 ([Skate3-Mobile](https://github.com/Buku313/Skate3-Mobile)) and **darchap**
 ([Skate3-Port](https://github.com/darchap/Skate3-Port)) have both been bringing
-this game to ARM64. Ported from darchap's work: stopping ambient crowds and
-props at the spawn instead of hiding them at the draw, and the foreground
-service that keeps a backgrounded session resident.
+this game to ARM64. Ported from darchap's work: six of this
+release's settings were his first — Vegetation, Pedestrians & Traffic, Movable
+Props, Hair Detail, Water Effects and the FPS Percentiles readout — plus the
+foreground service that keeps a backgrounded session resident. The crowd cuts
+are the good idea: pedestrians are stopped at the spawn instead of hidden at
+the draw, so one who never exists costs no collision, no voice and no update
+slot.
 
 **The GPU driver manager** — the Vulkan driver proxy, the driver importer and
 its verification, and the selection UI — is **Alan Constantino's** work, from

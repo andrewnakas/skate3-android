@@ -150,7 +150,8 @@ rate, so most of these cut work rather than pixels:
 - **Draw Batching**, which trades a few extra triangles for fewer draw calls.
   It is a trade, not a free win, which is why it is off by default.
 
-The crowd cuts are ported from darchap's Skate3-Port, which did them first.
+The crowd cuts, Vegetation, Hair Detail, Water Effects and the FPS Percentiles
+readout are all ported from darchap's Skate3-Port, which did them first.
 
 The app is also aligned for 16 KB memory pages, which Android 15 and newer
 devices require.
@@ -585,10 +586,13 @@ Without those four, there is no game to put on a phone.
 **Getting it onto Android.** **Buku313**
 ([Skate3-Mobile](https://github.com/Buku313/Skate3-Mobile)) and **darchap**
 ([Skate3-Port](https://github.com/darchap/Skate3-Port)) have both been working
-on Skate 3 on ARM64, and this build is better for it. Two things in this
-release come straight from darchap's port: stopping ambient crowds and props at
-the spawn rather than hiding them at the draw, and the foreground service that
-keeps a backgrounded session from being killed.
+on Skate 3 on ARM64, and this build is better for it. Six of this release's
+settings came straight from darchap's port — Vegetation, Pedestrians & Traffic,
+Movable Props, Hair Detail, Water Effects and the FPS Percentiles readout —
+along with the foreground service that keeps a backgrounded session from being
+killed. The crowd cuts are the good idea: pedestrians are stopped at the spawn
+rather than hidden at the draw, so one who never exists costs no collision, no
+voice and no update slot.
 
 **The GPU driver manager** — the Vulkan driver proxy, the driver importer and
 its verification, and the selection UI — is **Alan Constantino's** work, from
