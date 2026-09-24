@@ -1,10 +1,65 @@
 ================================================================================
-GPU driver support - third-party notices
+Third-party notices
 ================================================================================
 
-This app can load a Vulkan driver other than the one built into the device. The
-components below are redistributed inside the APK or compiled into it. Nothing
-here covers the game itself, which is not distributed with this app.
+The components below are redistributed inside the APK or compiled into it, and
+their licences ask that these notices travel with the binary. Nothing here
+covers the game itself, which is not distributed with this app.
+
+Most of what follows is GPU driver support: this app can load a Vulkan driver
+other than the one built into the device. The first section is not - it is game
+code compiled into the app.
+
+
+================================================================================
+Skate3-Port - darchap
+================================================================================
+
+Two things in this app are darchap's work, from
+https://github.com/darchap/Skate3-Port:
+
+  - Stopping ambient crowds and movable props at the SPAWN rather than hiding
+    them at the draw. The three LivingWorld census managers are hooked and take
+    the game's own "spawned nothing" exit, so an entity that is never created
+    costs no collision, no voice, no engine noise and no update slot. He did
+    this first; our engine commit 46eb33c ports it and says so. The later
+    "Other Skaters" cut is our own extension of the same technique.
+
+  - The foreground keep-alive service that stops Android taking the process
+    while a session is backgrounded. The 8 GiB guest mapping makes a cached
+    process the first thing the low-memory killer picks.
+
+Copyright (c) 2026 darchap
+
+BSD 3-Clause License
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+Per clause 3: darchap has not endorsed this build.
 
 
 ================================================================================

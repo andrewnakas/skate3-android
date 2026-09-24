@@ -1,0 +1,46 @@
+MIT License
+
+Copyright (c) 2026 Andrew Nakas
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+Scope, and other people's work.
+
+The licence above covers the Android application and launcher in this
+repository only.
+
+It does NOT cover the game. Skate 3 is not distributed here or in the APK;
+players supply their own copy.
+
+It does NOT cover the code this app is built on or ships alongside. The
+published APK is a binary distribution that includes work by other authors
+under their own licences:
+
+  - darchap (BSD 3-Clause) - the foreground keep-alive service and the
+    ambient-crowd and movable-prop cuts
+  - Billy Laws (BSD 2-Clause) - libadrenotools and liblinkernsbypass
+  - Alan Constantino - the GPU driver proxy, importer and selection UI
+  - Mesa / Turnip, as published by MrPurple666 - the bundled driver
+  - the upstream Skate 3 recompilation by Alex McHugh
+
+Those notices are reproduced in THIRD_PARTY_NOTICES.md and, for the components
+inside the APK, in app/src/main/assets/third-party/NOTICE.txt, which ships with
+the application. Read them as part of this licence rather than beside it.
