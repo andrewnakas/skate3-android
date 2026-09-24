@@ -568,19 +568,45 @@ consumes them. See the repository README.
 
 ## Credits
 
-Built on the Skate 3 native recompilation and the rexglue SDK, which is derived
-from Xenia's Xbox 360 research. The Android shell, platform work and tuning in
-this release are new; the iOS port shares the same engine.
+This port is the top of a stack of other people's work, and almost none of the
+hard parts started here.
 
-**Alan Constantino** ([skate3-pocket](https://github.com/AlanConstantino/skate3-pocket))
-wrote the GPU driver manager: the Vulkan driver proxy, the driver importer and
-its verification, and the selection UI, first released in his handheld-focused
-fork of this app and tested there on a Retroid Pocket 6. It is his work, adopted
-here with the default left on the device's own driver. `native/driver_proxy.cpp`
-is kept byte-identical to his so that changes on either side stay readable as a
-diff.
+**The recompilation.** Skate 3 runs as native code because of
+**Alex McHugh's** [Skate 3 recompilation](https://github.com/mchughalex/skate3recomp),
+which turns the Xbox 360 executable into C++ ahead of time. That in turn is
+built on the [**ReXGlue SDK**](https://github.com/rexglue/rexglue-sdk), the
+Xbox 360 recompilation runtime and toolkit, which is itself derived from the
+**Xenia** project's years of Xbox 360 research (Ben Vanik and contributors).
+**portingpete** did early Skate 3 bring-up on ReXGlue in
+[skate3-recomp](https://github.com/portingpete/skate3-recomp).
 
-Custom driver loading rests on **Billy Laws'**
-[libadrenotools](https://github.com/bylaws/libadrenotools) and liblinkernsbypass,
-and the drivers themselves on **Mesa/Turnip** and the **MrPurple** builds. Full
-licences ship in the app under **Driver licences**.
+Without those four, there is no game to put on a phone.
+
+**Getting it onto Android.** **Buku313**
+([Skate3-Mobile](https://github.com/Buku313/Skate3-Mobile)) and **darchap**
+([Skate3-Port](https://github.com/darchap/Skate3-Port)) have both been working
+on Skate 3 on ARM64, and this build is better for it. Two things in this
+release come straight from darchap's port: stopping ambient crowds and props at
+the spawn rather than hiding them at the draw, and the foreground service that
+keeps a backgrounded session from being killed.
+
+**The GPU driver manager** — the Vulkan driver proxy, the driver importer and
+its verification, and the selection UI — is **Alan Constantino's** work, from
+[skate3-pocket](https://github.com/AlanConstantino/skate3-pocket), his
+handheld-focused fork of this app where it was written and tested on a Retroid
+Pocket 6. It is adopted here with the default left on the device's own driver.
+`native/driver_proxy.cpp` is kept byte-identical to his so that changes on
+either side stay readable as a diff.
+
+**Custom maps.** The Skate 3 custom-map scene is **SunJaycy's** and **Ethan's**
+("dumb bad Ethan") work — the arena builder and the modding tools, and
+SunJaycy's [sk83.GLB2ARENA](https://github.com/SunJaycy/sk83.GLB2ARENA) and
+sk83.LevelCompiler for getting custom models and levels into the game. The map
+pack support in this app exists to load what they made possible.
+
+**Driver loading** rests on **Billy Laws'**
+[libadrenotools](https://github.com/bylaws/libadrenotools) and
+liblinkernsbypass, and the drivers themselves on **Mesa/Turnip** and the
+**MrPurple** builds. Full licences ship in the app under **Driver licences**.
+
+No game content is included, and none ever will be — you bring your own disc.

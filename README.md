@@ -124,20 +124,42 @@ any 64-bit phone from about 2018 onward and is what a shared APK should use.
 
 ## Credits
 
-The GPU driver manager — the Vulkan driver proxy, the driver importer and its
-verification, and the selection UI — is **Alan Constantino's** work, from
+Almost none of the hard parts started here.
+
+**The recompilation.** The engine is **Alex McHugh's**
+[Skate 3 recompilation](https://github.com/mchughalex/skate3recomp), which
+translates the Xbox 360 executable into C++ ahead of time, built on the
+[**ReXGlue SDK**](https://github.com/rexglue/rexglue-sdk) — the Xbox 360
+recompilation runtime and toolkit — which is itself derived from the **Xenia**
+project's Xbox 360 research (Ben Vanik and contributors). **portingpete** did
+early Skate 3 bring-up on ReXGlue in
+[skate3-recomp](https://github.com/portingpete/skate3-recomp).
+
+**Skate 3 on ARM64.** **Buku313**
+([Skate3-Mobile](https://github.com/Buku313/Skate3-Mobile)) and **darchap**
+([Skate3-Port](https://github.com/darchap/Skate3-Port)) have both been bringing
+this game to ARM64. Ported from darchap's work: stopping ambient crowds and
+props at the spawn instead of hiding them at the draw, and the foreground
+service that keeps a backgrounded session resident.
+
+**The GPU driver manager** — the Vulkan driver proxy, the driver importer and
+its verification, and the selection UI — is **Alan Constantino's** work, from
 [skate3-pocket](https://github.com/AlanConstantino/skate3-pocket), his
 handheld-focused fork of this app where it was written and tested on a Retroid
 Pocket 6. `native/driver_proxy.cpp` is kept byte-identical to his copy so that a
 change on either side reads as a diff rather than an archaeology exercise; see
 `native/PROVENANCE.md`.
 
-It stands on **Billy Laws'** [libadrenotools](https://github.com/bylaws/libadrenotools)
-and liblinkernsbypass for loading a driver at all, on **Mesa/Turnip** for the
-driver, and on the **MrPurple** Turnip builds for the one that ships here.
+**Custom maps** are **SunJaycy's** and **Ethan's** ("dumb bad Ethan") scene —
+the arena builder and the Skate 3 modding tools, plus SunJaycy's
+[sk83.GLB2ARENA](https://github.com/SunJaycy/sk83.GLB2ARENA) and
+sk83.LevelCompiler for getting custom models and levels into the game. The map
+pack support here exists to load what they made possible.
 
-The engine is Alex McHugh's Skate 3 recompilation and the rexglue SDK, itself
-derived from the Xenia project's Xbox 360 research.
+Custom driver loading stands on **Billy Laws'**
+[libadrenotools](https://github.com/bylaws/libadrenotools) and
+liblinkernsbypass, on **Mesa/Turnip** for the driver, and on the **MrPurple**
+Turnip builds for the one that ships here.
 
 ## Supporting the project
 
