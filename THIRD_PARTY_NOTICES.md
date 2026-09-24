@@ -21,19 +21,31 @@ Turnip, libadrenotools and liblinkernsbypass in full.
 Skate3-Port - darchap
 ================================================================================
 
-Two things in this app are darchap's work, from
-https://github.com/darchap/Skate3-Port:
+Six of this app's settings were darchap's first, from
+https://github.com/darchap/Skate3-Port. Both trees were compared against their
+common upstream and every shared line dated; all six landed in ours on
+2026-09-22, the day after the two ports were compared:
 
-  - Stopping ambient crowds and movable props at the SPAWN rather than hiding
-    them at the draw. The three LivingWorld census managers are hooked and take
-    the game's own "spawned nothing" exit, so an entity that is never created
-    costs no collision, no voice, no engine noise and no update slot. He did
-    this first; our engine commit 46eb33c ports it and says so. The later
-    "Other Skaters" cut is our own extension of the same technique.
+  - Vegetation cut ........................ his 2026-09-13
+  - Pedestrians & Traffic, Movable Props .. his 2026-09-13
+       (the spawn-source version, 2026-09-16)
+  - Hair Detail ........................... his 2026-09-14
+  - Water Effects ......................... his 2026-09-14
+  - FPS Percentiles, the 1% low and p95/p99 his 2026-09-15
 
-  - The foreground keep-alive service that stops Android taking the process
-    while a session is backgrounded. The 8 GiB guest mapping makes a cached
-    process the first thing the low-memory killer picks.
+Only the crowd cuts were credited at the time. The percentile code is his line
+for line - same four-second window, same max(1, n/100) slowest set, same
+mean-of-the-slowest-1% as FPS; ours adds comments and nothing else.
+
+The crowd cuts are the good idea and worth stating: rather than hiding the
+meshes at draw time, the three LivingWorld census managers are hooked and take
+the game's own "spawned nothing" exit, so an entity that is never created costs
+no collision, no voice, no engine noise and no update slot. The "Other Skaters"
+cut is our own extension of that technique.
+
+Also his: the foreground keep-alive service that stops Android taking the
+process while a session is backgrounded. The 8 GiB guest mapping makes a cached
+process the first thing the low-memory killer picks.
 
 Copyright (c) 2026 darchap
 

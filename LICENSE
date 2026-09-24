@@ -34,8 +34,9 @@ It does NOT cover the code this app is built on or ships alongside. The
 published APK is a binary distribution that includes work by other authors
 under their own licences:
 
-  - darchap (BSD 3-Clause) - the foreground keep-alive service and the
-    ambient-crowd and movable-prop cuts
+  - darchap (BSD 3-Clause) - the foreground keep-alive service, and six
+    settings that were his first: Vegetation, Pedestrians & Traffic, Movable
+    Props, Hair Detail, Water Effects and the FPS Percentiles readout
   - Billy Laws (BSD 2-Clause) - libadrenotools and liblinkernsbypass
   - Alan Constantino - the GPU driver proxy, importer and selection UI
   - Mesa / Turnip, as published by MrPurple666 - the bundled driver
