@@ -598,11 +598,13 @@ Pocket 6. It is adopted here with the default left on the device's own driver.
 `native/driver_proxy.cpp` is kept byte-identical to his so that changes on
 either side stay readable as a diff.
 
-**Custom maps.** The Skate 3 custom-map scene is **SunJaycy's** and **Ethan's**
-("dumb bad Ethan") work — the arena builder and the modding tools, and
-SunJaycy's [sk83.GLB2ARENA](https://github.com/SunJaycy/sk83.GLB2ARENA) and
-sk83.LevelCompiler for getting custom models and levels into the game. The map
-pack support in this app exists to load what they made possible.
+**Custom maps.** The Skate 3 custom-map scene is **SunJaycy's** and
+**Ethan's** work — SunJaycy's
+[sk83.GLB2ARENA](https://github.com/SunJaycy/sk83.GLB2ARENA) and
+sk83.LevelCompiler for getting custom models and levels into the game, and
+Ethan's [Dumbads Skate 3 Modding Tools](https://github.com/Ethanw05/DumbadsSkate3ModdingTools),
+the arena builder behind the custom maps people actually skate. The map pack
+support in this app exists to load what they made possible.
 
 **Driver loading** rests on **Billy Laws'**
 [libadrenotools](https://github.com/bylaws/libadrenotools) and

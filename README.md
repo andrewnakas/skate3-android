@@ -150,11 +150,12 @@ Pocket 6. `native/driver_proxy.cpp` is kept byte-identical to his copy so that a
 change on either side reads as a diff rather than an archaeology exercise; see
 `native/PROVENANCE.md`.
 
-**Custom maps** are **SunJaycy's** and **Ethan's** ("dumb bad Ethan") scene —
-the arena builder and the Skate 3 modding tools, plus SunJaycy's
+**Custom maps** are **SunJaycy's** and **Ethan's** scene — SunJaycy's
 [sk83.GLB2ARENA](https://github.com/SunJaycy/sk83.GLB2ARENA) and
-sk83.LevelCompiler for getting custom models and levels into the game. The map
-pack support here exists to load what they made possible.
+sk83.LevelCompiler for getting custom models and levels into the game, and
+Ethan's [Dumbads Skate 3 Modding Tools](https://github.com/Ethanw05/DumbadsSkate3ModdingTools),
+the arena builder behind the custom maps people actually skate. The map pack
+support here exists to load what they made possible.
 
 Custom driver loading stands on **Billy Laws'**
 [libadrenotools](https://github.com/bylaws/libadrenotools) and
