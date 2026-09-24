@@ -9,3 +9,4 @@ logs/
 .idea/
 .DS_Store
 .kotlin/
+scripts/__pycache__/

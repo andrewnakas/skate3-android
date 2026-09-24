@@ -3,7 +3,16 @@
 # something to copy and edit.
 #
 # Rationale for each value is in BuildAndroidArguments,
-# third_party/rexglue-sdk/src/ui/windowed_app_main_sdl.cpp.
+# third_party/rexglue-sdk/src/ui/windowed_app_main_sdl.cpp. Paths
+# (game_data_root, user_data_root, log_file) are derived at runtime and are
+# deliberately not listed.
+
+# Phones ship quiet. An INFO line written here is invisible on a device, which
+# has cost a whole verification round before now - if you need to see one,
+# raise this rather than assuming the code did not run.
+log_level=warn
+log_flush_level=warn
+log_flush_interval=1
 
 skate3_native_render_scene=true
 skate3_guest_fps_cap=60
@@ -27,6 +36,8 @@ texture_cache_memory_limit_soft_lifetime=30
 texture_cache_memory_limit_render_to_texture=24
 
 resolution_scale=1
+draw_resolution_scale_x=1
+draw_resolution_scale_y=1
 skate3_native_render_scene_msaa=1
 skate3_native_render_scene_shadow_static_size=1024
 skate3_native_render_scene_shadow_pcss=false
@@ -34,6 +45,29 @@ skate3_native_render_scene_ssao=false
 skate3_native_render_scene_bloom=false
 skate3_native_render_scene_shafts=false
 
+# Vulkan features this renderer does not use. Requiring them turned away
+# working devices for nothing.
+vulkan_require_geometry_shader=false
+vulkan_require_fill_mode_non_solid=false
+vulkan_require_vertex_pipeline_stores_and_atomics=false
+
+# Pre-optimise SPIR-V before the driver compiles it: older Adreno drivers
+# segfault in their own shader compiler on unoptimised input. Costs shader
+# compile time on first launch.
+vulkan_spirv_optimize=true
+
 gpu_wait_reg_mem_timeout_ms=20
+gpu_idle_spin_iterations=32
+rtl_critical_section_max_spin=256
+skate3_instance_free_defer_ms=250
+
+skate3_auto_install_dlc=true
+
 audio_device_channels=2
 audio_device_sample_frames=512
+
+# Diagnostics, all off in a shipping build.
+vulkan_log_debug_messages=false
+skate3_native_render_scene_perf_log=false
+presenter_present_cadence_log=false
+vulkan_present_timing_log=false

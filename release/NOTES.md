@@ -30,6 +30,11 @@ own Skate 3 Xbox 360 disc image.
 On-screen controls appear when no controller is attached and hide themselves
 when one is. Bluetooth and USB controllers work through SDL.
 
+Any button can be moved. **Controls -> Button Mapping** in the settings menu
+lists every controller button; highlight one, press the button you want it on,
+and it is bound. **Button Layout** has ready-made sets, including the A/B and
+X/Y swap that Nintendo-style pads need.
+
 ## Tuning
 
 The engine reads `files/user/android_args.txt` at startup, one setting per line.
@@ -43,6 +48,167 @@ phone. `quality.txt` spends that headroom on shadows, ambient occlusion and
 antialiasing. Change one setting at a time.
 
 ## New in this release
+
+**0.2.0 — remap any button, and a frame cap that actually held.**
+
+### Remap any button
+
+Every controller button can now be moved. Open the settings menu, go to
+**Controls**, and the **Button Mapping** group at the bottom lists each button
+on the pad. Highlight one, press the button you want it to be, and it is bound
+— no typing, no config file. The row counts down while it waits, so it can
+never sit there stuck.
+
+Binding a button that is already used **swaps the two**, rather than leaving
+the old one doing nothing. That is deliberate: it means the mapping is always a
+complete set and no button can end up unreachable, which is what makes it safe
+to experiment with.
+
+**Button Layout** above the list applies a whole set at once. **Nintendo (A/B,
+X/Y swapped)** is the one most people want: Switch-style and 8BitDo pads report
+those four buttons transposed from an Xbox pad, so the game has always read B
+when you pressed A. **Swap Bumpers & Triggers** moves the grabs onto the
+shoulder buttons, which helps on a pad with worn triggers. **Reset All Buttons**
+puts everything back.
+
+Three things are deliberately left alone by a remap, so a mapping you regret
+can always be undone: the shortcut that opens this menu always watches the
+physical buttons, menu navigation itself is never remapped, and the on-screen
+touch controls keep meaning what their labels say.
+
+The stick options that were already there — Swap Sticks, Invert Camera Y, and
+the deadzones — are unchanged and sit just above the new group.
+
+### The frame cap was not being applied
+
+The cap has a companion setting, `skate3_guest_fps_cap_auto`, and the code that
+protects a player's saved choices matched setting names by substring — so
+touching the auto row threw away the cap itself. The game then rendered as fast
+as it could into a 60 Hz screen and threw away roughly half of that work as
+heat. If your phone ran hot, or held 60 for a few minutes and then settled
+lower, this is very likely why.
+
+### Backgrounding the game no longer loses the session
+
+Leaving the game and coming back has been a coin flip. The reason is that the
+moment the activity stops, the process becomes a cached app, and Android picks
+cached victims by size — this one is reliably the largest thing on the device
+(measured at 1358 MB on a Galaxy S23 FE). It was picked first, every time, and
+you came back to the launcher with no crash and nothing to report.
+
+The game now runs a foreground service while a session is live, which moves it
+out of that bucket, so backgrounding and returning is an ordinary resume. That
+is why this build asks for the notification permission and shows one ongoing
+"Game session" entry while you are playing — that notification *is* the
+mechanism, not an advert, and nothing else is ever posted. It stops when you
+close the game.
+
+It is not immunity. A device genuinely out of memory still reclaims the
+process, and this does nothing about the ~1.2 GB of GPU memory a session holds.
+It stops the game being chosen first purely for being large and in the
+background.
+
+Adapted from darchap's Skate3-Port, which solved this before we did.
+
+### "The frame rate is fine but it feels like slow motion"
+
+If you have ever felt the game go syrupy while the counter still read a healthy
+number, this was real and it is fixed.
+
+Skate 3 advances exactly one refresh period of simulation per rendered frame,
+however long that frame actually took. So its speed is period divided by frame
+time: a 33 ms frame runs the game at half speed. It is not a dropped-frame
+look — the simulation genuinely advances slower.
+
+A clamp for this already existed, but it was compiled in only for one platform,
+so on Android it was never active. It is now. It stays a ceiling rather than
+being removed entirely, on purpose: uncapped, a three-second loading stall would
+advance three seconds of physics in a single step and put your skater through
+the world.
+
+### A lot more to turn down
+
+This build carries a batch of performance settings that were finished but never
+released. On a phone this port runs out of CPU long before it runs out of fill
+rate, so most of these cut work rather than pixels:
+
+- **Pedestrians & Traffic**, **Movable Props** and **Other Skaters** stop those
+  populations at the spawn instead of hiding them at the draw — an entity that
+  is never created costs no collision, no audio, no hair and no update slot,
+  which is the larger half of what a crowd costs here. These need a restart,
+  because the spawners run while the world streams in.
+- **3D Scene Resolution** renders the world at a fraction of the output and
+  scales it up, leaving the HUD sharp.
+- **NPC Update Rate** and **World Update Rate** run those systems every second,
+  third or fourth frame.
+- **Vegetation**, **Hair Detail** and **Water Effects** cuts.
+- **Draw Distance** now goes down to an eighth, where it used to stop at half.
+- **Frame Rate Cap** gains 40, 45 and 50. On a 120 Hz screen 40 divides evenly,
+  and on 90 Hz so does 45, so each frame lands on a refresh instead of beating
+  against one — which, with the fix above, means a lower cap plays at the right
+  speed rather than in slow motion.
+- **Draw Batching**, which trades a few extra triangles for fewer draw calls.
+  It is a trade, not a free win, which is why it is off by default.
+
+The crowd cuts are ported from darchap's Skate3-Port, which did them first.
+
+The app is also aligned for 16 KB memory pages, which Android 15 and newer
+devices require.
+
+### Also in this build
+
+- One fewer full-screen render pass per frame is available on Adreno
+  (off by default while it is measured).
+- The per-packet GPU timer that shipped switched **on** in every build to date
+  is now off unless asked for. It was doing about 1.7 million clock reads a
+  second on the busiest thread.
+- The FPS counter can now show the **1% low and the p95/p99 frame times**
+  (Video → FPS Percentiles). An average hides exactly the stutters that make a
+  game feel bad: a steady 60 and a 60 that drops four frames a second read the
+  same as an average and nothing like each other to play. These are the numbers
+  worth quoting in a bug report.
+- The developer benchmark that briefly sat beside those rows is gone. It was a
+  measurement tool, it reported only to the log, and it did not belong in a
+  player's settings menu.
+
+Everything from 0.1.26 and 0.1.25 below is also in this build.
+
+**0.1.26 — the first-run setup screen that could come up empty.**
+
+On a fresh install there was a chance of reaching "Select a difficulty level"
+with the list of options missing — the panel, the banner and the question all
+drawn, and nothing to choose. There was no way forward except closing the game
+and starting over, and a second attempt usually worked, which is what made it
+so hard to pin down.
+
+It only ever happened on a first launch, because a first launch is the only
+time the game has no compiled shaders yet. While a piece of the screen is still
+being prepared, drawing it is skipped — normally invisible, because the next
+frame draws it again. The setup screens are drawn once and kept, so anything
+skipped there was simply gone.
+
+The game now waits for those pieces to finish during first-run setup instead of
+skipping them. The wait only happens on the very first launch and only on
+screens where it is not noticeable.
+
+**0.1.25 — custom GPU drivers that actually load, and a launcher that stops
+crying wolf.**
+
+If you imported a GPU driver and the game behaved exactly as if you hadn't, it
+wasn't your driver and it wasn't your phone. A driver taken from another device
+is named `vulkan.adreno.so` — the same name Android has already loaded for its
+own UI — so the system handed the game back the driver it already had. Imported
+drivers are now renamed as they are installed, so yours is the one that loads.
+That is why only Turnip ever appeared to work: Turnip happens to use a name of
+its own. Drivers extracted from other devices, Qualcomm's own included, now
+work too.
+
+Picking a driver your phone cannot run used to leave the game unable to start,
+with a message telling you to reinstall — which never helped, because the
+driver selection survives a reinstall. It now recovers and says why.
+
+The launcher also stopped reporting every abnormal exit as a harmless
+out-of-memory kill, which had been hiding real crashes.
 
 **0.1.23 — the settings menu tells you when a restart is owed.**
 

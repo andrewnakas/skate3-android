@@ -1,0 +1,53 @@
+# Capture a guest profile and write an lld --symbol-ordering-file.
+#
+# What this is for: 67 MB of recompiled .text against a 32-64 KB L1I is the
+# standing pathology of static recompilation. A profile of the render thread
+# has the shape that predicts it - ~2,100 functions execute, no single hotspot
+# above 9%, but 50% of the samples land in ~115 functions and 80% in ~600.
+# Scattered, that hot set touches hundreds of pages; packed in profile order it
+# is a few contiguous MB. CMakeLists.txt already passes the file to lld; it has
+# simply never been produced.
+#
+# HOW TO USE
+#   scripts/push_args.sh android_args/profile-order.txt
+#   adb shell am force-stop com.nakas.skate3
+#   adb shell am start -n com.nakas.skate3/.SetupActivity
+#   ... play ~10 minutes of DENSE gameplay, not menus, not a loading screen ...
+#   adb pull /sdcard/Android/data/com.nakas.skate3/files/order.txt
+#   scripts/push_args.sh --clear        # <- do not skip this
+#
+# THE TRAP THIS FILE EXISTS TO AVOID: the order file is rewritten with
+# std::ios::trunc at the end of EVERY report window, and the sample counts are
+# cleared with it. At the default report_s=30 a ten-minute session leaves you
+# with a profile of the last thirty seconds - very likely a pause menu. 600 is
+# the maximum the cvar accepts, so one window covers the whole capture.
+#
+# Sampling is one thread only (skate3_guest_profile_thread). render_thread is
+# the right one: it sets the frame rate. Other guest threads get no layout.
+#
+# The profiler's reports are WARN, so they are visible at the shipped
+# log_level. Do NOT add log_level=info here - it costs real frame time and
+# would perturb the very distribution being measured.
+#
+# After the capture, read back:
+#   skate3 profile spread: N distinct guest functions; 50% in X, 80% in Y
+# If N is small or the thread reports few samples, you measured a menu.
+
+skate3_guest_profile=true
+skate3_guest_profile_thread=render_thread
+skate3_guest_profile_interval_us=1000
+skate3_guest_profile_report_s=600
+skate3_guest_profile_order_file=/sdcard/Android/data/com.nakas.skate3/files/order.txt
+
+# Pin the run to the intended shipping configuration so the captured layout
+# matches how the game is actually played, and so this session also settles
+# whether an explicitly-set cap survives to the [pace] line.
+skate3_guest_fps_cap=60
+skate3_guest_fps_cap_auto=false
+vsync=true
+
+# Lets a lever be flipped mid-run from adb instead of costing a relaunch and
+# the walk back to wherever the measurement happens:
+#   adb shell "echo skate3_guest_spin_yield=1 > \
+#     /sdcard/Android/data/com.nakas.skate3/files/user/live_cvars.txt"
+skate3_live_cvars=true
